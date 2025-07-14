@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infographic: Securing the Cloud with Client-Side Encryption</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <!--
+    Infographic Narrative Plan:
+    1. Hook: Start with a big statistic on data vulnerability to establish the problem.
+    2. The Problem: Visually represent the risk of storing plaintext data in the cloud.
+    3. The Solution: Introduce the client-side encryption model as the hero.
+    4. System Architecture Flowchart: Detail the step-by-step process of file encryption and upload. Implemented with HTML/CSS.
+    5. Technology Deep Dive: Break down the technology stack with a bar chart and explain the cryptographic process with a donut chart.
+    6. User Benefits: Conclude by highlighting the key advantages for the end-user.
+
+    Visualization Choices:
+    - Big Number (HTML/CSS): Goal: Inform. Justification: High-impact, grabs attention. (NO SVG)
+    - Flowchart (HTML/CSS): Goal: Organize. Justification: Clearly shows a process flow. (NO SVG, NO MERMAID JS)
+    - Donut Chart (Chart.js): Goal: Inform/Compare. Justification: Shows the two-part key system. (NO SVG)
+    - Bar Chart (Chart.js): Goal: Compare. Justification: Compares the roles of different technologies in the stack. (NO SVG)
+    - Icon List (HTML/Unicode): Goal: Organize. Justification: Cleanly presents key features. (NO SVG)
+
+    Color Palette Chosen: "Brilliant Blues" for a professional, vibrant, and tech-focused theme.
+
+    Confirmation: Neither Mermaid JS nor SVG graphics were used in this document. All diagrams and charts are rendered using either structured HTML/CSS with Tailwind or the HTML Canvas element via Chart.js.
+    -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F8F9FA;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 400px;
+        }
+        @media (max-width: 768px) {
+            .chart-container {
+                height: 300px;
+            }
+        }
+        .flow-arrow {
+            color: #0094FF;
+            font-size: 2.5rem;
+            line-height: 1;
+            font-weight: bold;
+        }
+        .flow-card {
+            border: 2px solid #004AAD;
+            background-color: white;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .flow-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+
+        <header class="text-center mb-12 md:mb-16">
+            <h1 class="text-4xl md:text-6xl font-black text-[#004AAD] mb-4">Secure Cloud Storage</h1>
+            <p class="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto">A Visual Guide to Protecting Your Data with a Client-Side Cryptographic Overlay</p>
+        </header>
+
+        <section id="problem" class="mb-12 md:mb-20">
+            <div class="bg-white rounded-2xl shadow-lg p-8 md:p-12 text-center">
+                <h2 class="text-2xl font-bold text-[#004AAD] mb-4">The Digital Dilemma</h2>
+                <p class="text-gray-600 mb-8 max-w-2xl mx-auto">Public cloud storage offers incredible convenience, but uploading sensitive files directly exposes them to potential risks, including provider data breaches, unauthorized access, and surveillance. Your data's privacy shouldn't be an afterthought.</p>
+                <div class="text-7xl md:text-9xl font-extrabold text-[#0094FF]">
+                    95%
+                </div>
+                <p class="text-lg text-gray-700 font-semibold mt-4">of cloud security failures will be the customer's fault through 2025.</p>
+                <p class="text-sm text-gray-500 mt-2">(Gartner Forecast)</p>
+            </div>
+        </section>
+
+        <section id="architecture" class="mb-12 md:mb-20">
+             <div class="text-center mb-10">
+                <h2 class="text-3xl font-bold text-[#004AAD]">The Zero-Knowledge Architecture</h2>
+                <p class="text-lg text-gray-600 mt-2 max-w-3xl mx-auto">This system ensures data is encrypted on your device *before* it ever reaches the cloud. The cloud provider only ever stores scrambled, unreadable data, giving you complete control and confidentiality.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-5 items-center gap-6">
+                
+                <div class="flow-card rounded-lg p-4 text-center md:col-span-1">
+                    <div class="text-3xl mb-2">👤</div>
+                    <h3 class="font-bold text-[#004AAD]">1. User Action</h3>
+                    <p class="text-sm text-gray-600">User selects a file and provides a secret recovery phrase in the browser.</p>
+                </div>
+
+                <div class="flow-arrow text-center hidden md:block">→</div>
+                
+                <div class="flow-card rounded-lg p-4 text-center md:col-span-1">
+                    <div class="text-3xl mb-2">💻</div>
+                    <h3 class="font-bold text-[#004AAD]">2. Client-Side Encryption</h3>
+                    <p class="text-sm text-gray-600">The browser encrypts the file using a newly generated, strong file key.</p>
+                </div>
+
+                <div class="flow-arrow text-center hidden md:block">→</div>
+
+                <div class="flow-card rounded-lg p-4 text-center md:col-span-1">
+                    <div class="text-3xl mb-2">🔑</div>
+                    <h3 class="font-bold text-[#004AAD]">3. Key Wrapping</h3>
+                    <p class="text-sm text-gray-600">The file key is then encrypted ("wrapped") using a key derived from the user's secret phrase.</p>
+                </div>
+
+            </div>
+            
+            <div class="flex justify-center my-4">
+                 <div class="flow-arrow rotate-90">→</div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-5 items-center gap-6">
+
+                 <div class="flow-card rounded-lg p-4 text-center md:col-span-1 md:col-start-5">
+                    <div class="text-3xl mb-2">📄</div>
+                    <h3 class="font-bold text-[#004AAD]">5. Secure Download</h3>
+                    <p class="text-sm text-gray-600">The process reverses on the client-side for secure decryption and file access.</p>
+                </div>
+
+                <div class="flow-arrow text-center hidden md:block md:col-start-4 row-start-1">←</div>
+
+                <div class="flow-card rounded-lg p-4 text-center md:col-span-1 md:col-start-3 row-start-1">
+                    <div class="text-3xl mb-2">☁️</div>
+                    <h3 class="font-bold text-[#004AAD]">4. Secure Upload</h3>
+                    <p class="text-sm text-gray-600">The encrypted file and the wrapped key are uploaded to public cloud storage.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="tech" class="mb-12 md:mb-20">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl font-bold text-[#004AAD]">Under the Hood: The Technology Stack</h2>
+                <p class="text-lg text-gray-600 mt-2 max-w-3xl mx-auto">A combination of modern, secure, and browser-native technologies powers the entire system, ensuring performance and reliability without requiring users to install any software.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                <div class="bg-white rounded-2xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-center mb-4 text-[#004AAD]">Core System Components</h3>
+                    <div class="chart-container">
+                        <canvas id="techStackChart"></canvas>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-4 text-center">This bar chart illustrates the key technology categories and their role within the architecture. The frontend handles all user interaction and cryptographic operations, while cloud APIs and backend services are used purely for storage.</p>
+                </div>
+                <div class="bg-white rounded-2xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-center mb-4 text-[#004AAD]">The Two-Key System</h3>
+                     <div class="chart-container">
+                        <canvas id="keySystemChart"></canvas>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-4 text-center">A powerful two-key mechanism is used. A strong, random key encrypts the file, and a separate key, derived from the user's memorable phrase, encrypts only the file key. This provides both maximum security and user-friendly recovery.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="benefits" class="mb-12 md:mb-20">
+             <div class="bg-white rounded-2xl shadow-lg p-8 md:p-12">
+                 <div class="text-center mb-10">
+                    <h2 class="text-3xl font-bold text-[#004AAD]">Key Features & User Benefits</h2>
+                    <p class="text-lg text-gray-600 mt-2 max-w-3xl mx-auto">The system is designed from the ground up to empower users with true data ownership and peace of mind.</p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 text-center">
+                    <div class="p-4">
+                        <div class="text-5xl mb-4">🛡️</div>
+                        <h3 class="text-xl font-bold text-[#004AAD]">Zero-Knowledge</h3>
+                        <p class="text-gray-600">Your unencrypted data and secret phrase never leave your device. We can't see it, and neither can the cloud provider.</p>
+                    </div>
+                    <div class="p-4">
+                        <div class="text-5xl mb-4">😀</div>
+                        <h3 class="text-xl font-bold text-[#004AAD]">User-Friendly</h3>
+                        <p class="text-gray-600">No complex settings. A simple, memorable phrase is all you need to secure and recover your files.</p>
+                    </div>
+                     <div class="p-4">
+                        <div class="text-5xl mb-4">🔐</div>
+                        <h3 class="text-xl font-bold text-[#004AAD]">Full Control</h3>
+                        <p class="text-gray-600">You hold the keys to your data. Access can only be granted by you, on your device.</p>
+                    </div>
+                    <div class="p-4">
+                        <div class="text-5xl mb-4">⚙️</div>
+                        <h3 class="text-xl font-bold text-[#004AAD]">Strong Cryptography</h3>
+                        <p class="text-gray-600">Utilizes industry-standard AES-256 and PBKDF2, implemented via the browser's native Web Crypto API for maximum security.</p>
+                    </div>
+                </div>
+             </div>
+        </section>
+
+    </div>
+
+    <footer class="text-center p-6 bg-[#004AAD] text-white">
+        <p>An infographic visualizing a dissertation project by a dedicated student.</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const wrapLabel = (str, maxLen = 16) => {
+                if (str.length <= maxLen) {
+                    return str;
+                }
+                const words = str.split(' ');
+                const lines = [];
+                let currentLine = '';
+                for (const word of words) {
+                    if ((currentLine + word).length > maxLen) {
+                        lines.push(currentLine.trim());
+                        currentLine = '';
+                    }
+                    currentLine += word + ' ';
+                }
+                lines.push(currentLine.trim());
+                return lines;
+            };
+
+            const tooltipTitleCallback = (tooltipItems) => {
+                const item = tooltipItems[0];
+                let label = item.chart.data.labels[item.dataIndex];
+                if (Array.isArray(label)) {
+                    return label.join(' ');
+                } else {
+                    return label;
+                }
+            };
+            
+            const brilliantBlues = {
+                deep: '#004AAD',
+                bright: '#0094FF',
+                sky: '#87CEEB',
+                accent: '#FFC107',
+                text: '#333333'
+            };
+
+            const techStackCtx = document.getElementById('techStackChart');
+            if(techStackCtx) {
+                new Chart(techStackCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: [
+                            wrapLabel('Frontend (React & Tailwind)'), 
+                            wrapLabel('Cryptography (Web Crypto API)'), 
+                            wrapLabel('Cloud Storage API (Google Drive)'), 
+                            wrapLabel('Backend Services (Firebase)')
+                        ],
+                        datasets: [{
+                            label: 'Role in Architecture',
+                            data: [100, 90, 75, 60],
+                            backgroundColor: [
+                                brilliantBlues.bright,
+                                brilliantBlues.deep,
+                                brilliantBlues.sky,
+                                brilliantBlues.accent,
+                            ],
+                            borderColor: [
+                                brilliantBlues.bright,
+                                brilliantBlues.deep,
+                                brilliantBlues.sky,
+                                brilliantBlues.accent,
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: tooltipTitleCallback
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                grid: {
+                                    display: false
+                                },
+                                ticks: {
+                                   display: false
+                                }
+                            },
+                            y: {
+                                ticks: {
+                                    font: {
+                                        size: 14
+                                    },
+                                    color: brilliantBlues.text
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            const keySystemCtx = document.getElementById('keySystemChart');
+            if(keySystemCtx) {
+                new Chart(keySystemCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['File Encryption Key (AES-256)', 'User-Derived Wrapping Key (PBKDF2)'],
+                        datasets: [{
+                            label: 'Key Types',
+                            data: [50, 50],
+                            backgroundColor: [
+                                brilliantBlues.deep,
+                                brilliantBlues.bright
+                            ],
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    font: {
+                                        size: 14
+                                    },
+                                     color: brilliantBlues.text
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: tooltipTitleCallback
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
