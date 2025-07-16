@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infographic: Dissertation Project Development Roadmap</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <!--
+    Infographic Narrative Plan:
+    1. Introduction: Title the infographic clearly as a project roadmap.
+    2. The Roadmap: Create a main section visualizing the 6 phases from the source material as a vertical timeline. This will be the central narrative element.
+    3. Phase Breakdown: Each phase on the timeline will be a "card" summarizing its key goals and activities (e.g., "Core Client-Side Crypto", "Backend Integration").
+    4. Technology Spotlight: Use a dedicated section with a bar chart to visualize the core technologies (Python, JS, MongoDB, etc.) and their roles.
+    5. Final Goals: Conclude with a section that highlights the key project outcomes like Security, Usability, and Documentation, using an icon list.
+
+    Visualization Choices:
+    - Vertical Timeline (HTML/CSS): Goal: Organize. Justification: This is the most effective way to represent a multi-phase project roadmap chronologically. (NO SVG, NO MERMAID JS)
+    - Bar Chart (Chart.js): Goal: Compare. Justification: Clearly illustrates the different components of the technology stack and their conceptual roles in the project. (NO SVG)
+    - Icon List (HTML/Unicode): Goal: Inform. Justification: A clean, visually appealing way to list the final high-level goals of the project. (NO SVG)
+
+    Color Palette Chosen: "Energetic & Playful" (#FF6B6B, #FFD166, #06D6A0, #118AB2, #073B4C) for a dynamic and engaging visual theme suitable for a development plan.
+
+    Confirmation: Neither Mermaid JS nor SVG graphics were used in this document. All diagrams and charts are rendered using either structured HTML/CSS with Tailwind or the HTML Canvas element via Chart.js.
+    -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 400px;
+            max-height: 450px;
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-bottom: 2.5rem;
+            padding-left: 2.5rem;
+        }
+
+        .timeline-item:last-child {
+            padding-bottom: 0;
+        }
+
+        .timeline-line {
+            position: absolute;
+            left: 0.5rem;
+            top: 0.5rem;
+            bottom: -0.5rem;
+            width: 2px;
+            background-color: #118AB2;
+        }
+
+        .timeline-item:last-child .timeline-line {
+            display: none;
+        }
+
+        .timeline-dot {
+            position: absolute;
+            left: 0;
+            top: 0.5rem;
+            height: 1rem;
+            width: 1rem;
+            background-color: #FF6B6B;
+            border-radius: 9999px;
+            border: 2px solid white;
+        }
+    </style>
+</head>
+
+<body class="text-[#073B4C]">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+
+        <header class="text-center mb-12 md:mb-16">
+            <h1 class="text-4xl md:text-6xl font-black text-[#073B4C] mb-4">Project Development Roadmap</h1>
+            <p class="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto">A visual guide to building the Client-Side
+                Cryptographic Overlay System, from initial setup to final documentation.</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12">
+
+            <section id="roadmap" class="lg:col-span-3">
+                <div class="bg-white rounded-2xl shadow-lg p-8 md:p-12 h-full">
+                    <h2 class="text-3xl font-bold text-[#073B4C] mb-8 text-center">The 6 Phases of Development</h2>
+                    <div class="relative">
+                        <div class="timeline-line"></div>
+
+                        <div class="timeline-item">
+                            <div class="timeline-dot"></div>
+                            <h3 class="text-xl font-bold text-[#118AB2]">Phase 1: Core Client-Side Crypto</h3>
+                            <p class="text-gray-600 mt-2">Establish fundamental encryption/decryption in the browser
+                                using the Web Crypto API. Focus on key derivation (PBKDF2), file encryption (AES-GCM),
+                                and key wrapping. The goal is a working, local-only prototype.</p>
+                        </div>
+
+                        <div class="timeline-item">
+                            <div class="timeline-dot"></div>
+                            <h3 class="text-xl font-bold text-[#118AB2]">Phase 2: Backend Integration</h3>
+                            <p class="text-gray-600 mt-2">Connect the frontend to the Python (Flask) backend. Develop
+                                API endpoints to securely store and retrieve wrapped keys and metadata in MongoDB,
+                                laying the groundwork for persistent data.</p>
+                        </div>
+
+                        <div class="timeline-item">
+                            <div class="timeline-dot"></div>
+                            <h3 class="text-xl font-bold text-[#118AB2]">Phase 3: Cloud Storage Integration</h3>
+                            <p class="text-gray-600 mt-2">Enable uploading and downloading of encrypted files to Google
+                                Drive. Implement OAuth 2.0 for user authorization and use the Google Drive API to manage
+                                files, linking them to keys stored in MongoDB.</p>
+                        </div>
+
+                        <div class="timeline-item">
+                            <div class="timeline-dot"></div>
+                            <h3 class="text-xl font-bold text-[#118AB2]">Phase 4: User Experience & Recovery</h3>
+                            <p class="text-gray-600 mt-2">Enhance the UI/UX with clear feedback, progress indicators,
+                                and user-friendly error messages. Implement a secure key recovery mechanism, such as
+                                using security questions, to improve usability.</p>
+                        </div>
+
+                        <div class="timeline-item">
+                            <div class="timeline-dot"></div>
+                            <h3 class="text-xl font-bold text-[#118AB2]">Phase 5: Security Hardening & Testing</h3>
+                            <p class="text-gray-600 mt-2">Fortify the system by implementing security best practices
+                                like input validation, rate limiting, and HTTPS. Conduct comprehensive unit,
+                                integration, and security testing to ensure reliability and robustness.</p>
+                        </div>
+
+                        <div class="timeline-item">
+                            <div class="timeline-dot"></div>
+                            <h3 class="text-xl font-bold text-[#118AB2]">Phase 6: Documentation & Refinement</h3>
+                            <p class="text-gray-600 mt-2">Prepare the project for submission. Create detailed technical
+                                documentation, a user manual, a security analysis, and performance benchmarks. Refine
+                                the UI and address any final bugs.</p>
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+
+            <aside class="lg:col-span-2 flex flex-col gap-8">
+                <section id="tech-stack" class="bg-white rounded-2xl shadow-lg p-8">
+                    <h3 class="text-2xl font-bold text-center mb-4 text-[#073B4C]">Core Technology Stack</h3>
+                    <p class="text-center text-gray-600 mb-6">This chart highlights the primary technologies used and
+                        their roles, forming the foundation of the system's architecture.</p>
+                    <div class="chart-container">
+                        <canvas id="techStackChart"></canvas>
+                    </div>
+                </section>
+
+                <section id="goals" class="bg-white rounded-2xl shadow-lg p-8">
+                    <h3 class="text-2xl font-bold text-center mb-6 text-[#073B4C]">Key Project Goals</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center">
+                            <span class="text-2xl mr-4">🛡️</span>
+                            <div>
+                                <h4 class="font-bold">Security & Confidentiality</h4>
+                                <p class="text-gray-600 text-sm">Ensure data is encrypted end-to-end, with only the user
+                                    having access to their keys.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="text-2xl mr-4">😀</span>
+                            <div>
+                                <h4 class="font-bold">User-Friendliness</h4>
+                                <p class="text-gray-600 text-sm">Create an intuitive interface that simplifies complex
+                                    cryptographic processes for non-technical users.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="text-2xl mr-4">⚙️</span>
+                            <div>
+                                <h4 class="font-bold">Robustness & Reliability</h4>
+                                <p class="text-gray-600 text-sm">Build a well-tested and stable system that handles
+                                    errors gracefully and performs reliably.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </aside>
+
+        </main>
+
+        <footer class="text-center p-6 mt-12 text-gray-500">
+
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const wrapLabel = (str, maxLen = 16) => {
+                if (str.length <= maxLen) {
+                    return str;
+                }
+                const words = str.split(' ');
+                const lines = [];
+                let currentLine = '';
+                words.forEach(word => {
+                    if ((currentLine + word).length > maxLen) {
+                        lines.push(currentLine.trim());
+                        currentLine = '';
+                    }
+                    currentLine += word + ' ';
+                });
+                lines.push(currentLine.trim());
+                return lines;
+            };
+
+            const tooltipTitleCallback = (tooltipItems) => {
+                const item = tooltipItems[0];
+                let label = item.chart.data.labels[item.dataIndex];
+                if (Array.isArray(label)) {
+                    return label.join(' ');
+                } else {
+                    return label;
+                }
+            };
+
+            const playfulPalette = {
+                coral: '#FF6B6B',
+                yellow: '#FFD166',
+                green: '#06D6A0',
+                blue: '#118AB2',
+                navy: '#073B4C'
+            };
+
+            const techStackCtx = document.getElementById('techStackChart');
+            if (techStackCtx) {
+                new Chart(techStackCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: [
+                            'Frontend (HTML/JS)',
+                            'Web Crypto API',
+                            'Backend (Python/Flask)',
+                            'Database (MongoDB)',
+                            wrapLabel('Cloud API (Google Drive)')
+                        ],
+                        datasets: [{
+                            label: 'Role in Project',
+                            data: [80, 95, 75, 70, 60],
+                            backgroundColor: [
+                                playfulPalette.yellow,
+                                playfulPalette.coral,
+                                playfulPalette.blue,
+                                playfulPalette.green,
+                                '#4ECDC4'
+                            ],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: tooltipTitleCallback
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                grid: {
+                                    display: false,
+                                    drawBorder: false
+                                },
+                                ticks: {
+                                    display: false
+                                }
+                            },
+                            y: {
+                                grid: {
+                                    display: false,
+                                    drawBorder: false
+                                },
+                                ticks: {
+                                    font: {
+                                        size: 14,
+                                        weight: '600'
+                                    },
+                                    color: playfulPalette.navy
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+
+</html>

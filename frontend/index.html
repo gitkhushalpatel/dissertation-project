@@ -1,1 +1,354 @@
-<h1>hello aurojit</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client-Side File Encryptor/Decryptor (Phase 1)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white rounded-2xl shadow-xl p-8 md:p-10 w-full max-w-2xl">
+        <h1 class="text-3xl md:text-4xl font-bold text-center text-[#073B4C] mb-6">Secure File Operations (Phase 1)</h1>
+        <p class="text-center text-gray-600 mb-8">Encrypt and decrypt files directly in your browser. Your data never leaves your device unencrypted.</p>
+
+        <div class="space-y-6">
+            <div>
+                <label for="fileInput" class="block text-sm font-medium text-gray-700 mb-2">Select File:</label>
+                <div class="flex items-center space-x-2">
+                    <input type="file" id="fileInput" class="block w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-[#FFD166] file:text-[#073B4C]
+                        hover:file:bg-[#FFC107] cursor-pointer" />
+                    <button id="clearFileButton"
+                            class="p-2 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors duration-200
+                                   focus:outline-none focus:ring-2 focus:ring-[#118AB2] focus:ring-offset-2"
+                            title="Clear selected file">
+                        &#x2715;
+                    </button>
+                </div>
+                <div class="mt-2 text-sm text-gray-700">
+                    Selected: <span id="selectedFileName" class="font-semibold text-[#073B4C]">No file selected.</span>
+                </div>
+            </div>
+
+            <div>
+                <label for="recoveryPhrase" class="block text-sm font-medium text-gray-700 mb-2">Recovery Phrase (e.g., a strong password):</label>
+                <input type="password" id="recoveryPhrase" placeholder="Enter your secret phrase"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm
+                              focus:outline-none focus:ring-[#118AB2] focus:border-[#118AB2] sm:text-sm" />
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-4">
+                <button id="encryptButton"
+                        class="flex-1 bg-[#118AB2] text-white py-2 px-4 rounded-md font-semibold
+                               hover:bg-[#06D6A0] transition-colors duration-200 shadow-md">
+                    Encrypt File
+                </button>
+                <button id="decryptButton"
+                        class="flex-1 bg-[#FF6B6B] text-white py-2 px-4 rounded-md font-semibold
+                               hover:bg-[#FFD166] transition-colors duration-200 shadow-md">
+                    Decrypt File
+                </button>
+            </div>
+
+            <div id="statusMessage" class="text-center text-sm text-gray-600 mt-4"></div>
+            
+            <div id="downloadEncryptedArea" class="text-center mt-4 hidden">
+                <a id="downloadEncryptedLink" href="#" download class="inline-block bg-[#118AB2] text-white py-2 px-6 rounded-md font-semibold
+                                                              hover:bg-[#06D6A0] transition-colors duration-200 shadow-md">
+                    Download Encrypted File
+                </a>
+            </div>
+
+            <div id="downloadArea" class="text-center mt-4 hidden">
+                <a id="downloadLink" href="#" download class="inline-block bg-[#06D6A0] text-white py-2 px-6 rounded-md font-semibold
+                                                              hover:bg-[#118AB2] transition-colors duration-200 shadow-md">
+                    Download Decrypted File
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let encryptedData = null;
+        let wrappedKey = null;
+        let iv = null; // IV for file content encryption
+        let salt = null;
+        let keyWrappingIv = null; // IV specifically for key wrapping/unwrapping
+        let originalFileName = '';
+
+        const fileInput = document.getElementById('fileInput');
+        const recoveryPhraseInput = document.getElementById('recoveryPhrase');
+        const statusMessage = document.getElementById('statusMessage');
+        const downloadArea = document.getElementById('downloadArea');
+        const downloadLink = document.getElementById('downloadLink');
+        const downloadEncryptedArea = document.getElementById('downloadEncryptedArea');
+        const downloadEncryptedLink = document.getElementById('downloadEncryptedLink');
+        const clearFileButton = document.getElementById('clearFileButton');
+        const selectedFileNameSpan = document.getElementById('selectedFileName');
+
+        const generateRandomBytes = (length) => {
+            return window.crypto.getRandomValues(new Uint8Array(length));
+        };
+
+        const arrayBufferToBase64 = (buffer) => {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        };
+
+        const base64ToArrayBuffer = (base64) => {
+            const binary_string = window.atob(base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
+            }
+            return bytes.buffer;
+        };
+
+        const getPasswordKey = async (password, saltBytes) => {
+            const enc = new TextEncoder();
+            const keyMaterial = await window.crypto.subtle.importKey(
+                "raw",
+                enc.encode(password),
+                { name: "PBKDF2" },
+                false,
+                ["deriveKey"]
+            );
+            return window.crypto.subtle.deriveKey(
+                {
+                    name: "PBKDF2",
+                    salt: saltBytes,
+                    iterations: 100000,
+                    hash: "SHA-256",
+                },
+                keyMaterial,
+                { name: "AES-GCM", length: 256 },
+                true,
+                ["wrapKey", "unwrapKey"]
+            );
+        };
+
+        // Function to clear only the cryptographic data and UI status
+        const clearCryptoDataAndUIState = () => {
+            encryptedData = null;
+            wrappedKey = null;
+            iv = null;
+            salt = null;
+            keyWrappingIv = null; // Clear the key wrapping IV
+            originalFileName = '';
+            localStorage.removeItem('encryptedData');
+            localStorage.removeItem('wrappedKey');
+            localStorage.removeItem('iv');
+            localStorage.removeItem('salt');
+            localStorage.removeItem('keyWrappingIv'); // Remove from localStorage
+            localStorage.removeItem('originalFileName');
+            statusMessage.textContent = '';
+            downloadArea.classList.add('hidden');
+            downloadEncryptedArea.classList.add('hidden'); // Hide encrypted download link
+        };
+
+        fileInput.addEventListener('change', () => {
+            clearCryptoDataAndUIState(); // Clear previous crypto data
+            if (fileInput.files.length > 0) {
+                selectedFileNameSpan.textContent = fileInput.files[0].name;
+            } else {
+                selectedFileNameSpan.textContent = 'No file selected.';
+            }
+        });
+
+        clearFileButton.addEventListener('click', () => {
+            clearCryptoDataAndUIState(); // Clear crypto data
+            fileInput.value = ''; // Explicitly clear the file input
+            selectedFileNameSpan.textContent = 'No file selected.'; // Explicitly clear the display
+            statusMessage.textContent = 'File selection cleared.';
+            statusMessage.style.color = '#FF6B6B';
+        });
+
+        document.getElementById('encryptButton').addEventListener('click', async () => {
+            downloadArea.classList.add('hidden');
+            downloadEncryptedArea.classList.add('hidden'); // Ensure hidden at start of encryption
+
+            const file = fileInput.files[0];
+            const recoveryPhrase = recoveryPhraseInput.value.trim(); // Trim whitespace
+
+            if (!file) {
+                statusMessage.textContent = 'Please select a file.';
+                statusMessage.style.color = '#FF6B6B';
+                return;
+            }
+            if (!recoveryPhrase) {
+                statusMessage.textContent = 'Please enter a recovery phrase.';
+                statusMessage.style.color = '#FF6B6B';
+                return;
+            }
+
+            statusMessage.textContent = 'Encrypting... Please wait.';
+            statusMessage.style.color = '#118AB2';
+
+            try {
+                originalFileName = file.name;
+                const fileReader = new FileReader();
+                fileReader.onload = async (e) => {
+                    const fileContent = e.target.result; // ArrayBuffer
+
+                    // Generate a random AES-GCM key for the file
+                    const aesGcmKey = await window.crypto.subtle.generateKey(
+                        { name: "AES-GCM", length: 256 },
+                        true,
+                        ["encrypt", "decrypt"]
+                    );
+
+                    // Generate a random IV for file content encryption
+                    iv = generateRandomBytes(12); // 96-bit IV recommended for AES-GCM
+
+                    // Encrypt the file content
+                    encryptedData = await window.crypto.subtle.encrypt(
+                        { name: "AES-GCM", iv: iv },
+                        aesGcmKey,
+                        fileContent
+                    );
+
+                    // Generate salt for PBKDF2
+                    salt = generateRandomBytes(16);
+
+                    // Derive the wrapping key from the recovery phrase
+                    const wrappingKey = await getPasswordKey(recoveryPhrase, salt);
+
+                    // Generate a new IV specifically for key wrapping
+                    keyWrappingIv = generateRandomBytes(12);
+
+                    // Wrap (encrypt) the AES-GCM key with the wrapping key
+                    wrappedKey = await window.crypto.subtle.wrapKey(
+                        "raw",
+                        aesGcmKey,
+                        wrappingKey,
+                        { name: "AES-GCM", iv: keyWrappingIv } // Pass the key wrapping IV here
+                    );
+
+                    statusMessage.textContent = 'File encrypted successfully! Ready for decryption.';
+                    statusMessage.style.color = '#06D6A0';
+                    recoveryPhraseInput.value = ''; // Clear phrase on successful encryption
+
+                    // For demonstration, these would be sent to backend/cloud
+                    console.log('Encrypted Data (ArrayBuffer):', encryptedData);
+                    console.log('Wrapped Key (ArrayBuffer):', wrappedKey);
+                    console.log('File Content IV (Uint8Array):', iv);
+                    console.log('Salt (Uint8Array):', salt);
+                    console.log('Key Wrapping IV (Uint8Array):', keyWrappingIv);
+
+                    // Simulate storing them for decryption demo
+                    localStorage.setItem('encryptedData', arrayBufferToBase64(encryptedData));
+                    localStorage.setItem('wrappedKey', arrayBufferToBase64(wrappedKey));
+                    localStorage.setItem('iv', arrayBufferToBase64(iv)); // IV for file content
+                    localStorage.setItem('salt', arrayBufferToBase64(salt));
+                    localStorage.setItem('keyWrappingIv', arrayBufferToBase64(keyWrappingIv)); // Store key wrapping IV
+                    localStorage.setItem('originalFileName', originalFileName);
+
+                    // Make encrypted download link visible
+                    const encryptedBlob = new Blob([encryptedData], { type: 'application/octet-stream' });
+                    const encryptedDownloadUrl = URL.createObjectURL(encryptedBlob);
+                    downloadEncryptedLink.href = encryptedDownloadUrl;
+                    downloadEncryptedLink.download = `encrypted_${originalFileName || 'file'}.enc`;
+                    downloadEncryptedArea.classList.remove('hidden');
+
+                };
+                fileReader.readAsArrayBuffer(file);
+
+            } catch (error) {
+                console.error('Encryption failed:', error);
+                statusMessage.textContent = `Encryption failed: ${error.message || error}. Check console for details.`;
+                statusMessage.style.color = '#FF6B6B';
+            }
+        });
+
+        document.getElementById('decryptButton').addEventListener('click', async () => {
+            const recoveryPhrase = recoveryPhraseInput.value.trim(); // Trim whitespace
+
+            if (!recoveryPhrase) {
+                statusMessage.textContent = 'Please enter your recovery phrase.';
+                statusMessage.style.color = '#FF6B6B';
+                return;
+            }
+
+            // Retrieve stored data for decryption demo
+            const storedEncryptedData = localStorage.getItem('encryptedData');
+            const storedWrappedKey = localStorage.getItem('wrappedKey');
+            const storedIv = localStorage.getItem('iv'); // IV for file content
+            const storedSalt = localStorage.getItem('salt');
+            const storedKeyWrappingIv = localStorage.getItem('keyWrappingIv'); // Retrieve key wrapping IV
+            const storedOriginalFileName = localStorage.getItem('originalFileName');
+
+            if (!storedEncryptedData || !storedWrappedKey || !storedIv || !storedSalt || !storedKeyWrappingIv) {
+                statusMessage.textContent = 'No encrypted data found. Please encrypt a file first.';
+                statusMessage.style.color = '#FF6B6B';
+                return;
+            }
+
+            statusMessage.textContent = 'Decrypting... Please wait.';
+            statusMessage.style.color = '#118AB2';
+
+            try {
+                const unwrappedIv = base64ToArrayBuffer(storedIv);
+                const unwrappedSalt = base64ToArrayBuffer(storedSalt);
+                const unwrappedEncryptedData = base64ToArrayBuffer(storedEncryptedData);
+                const unwrappedWrappedKey = base64ToArrayBuffer(storedWrappedKey);
+                const unwrappedKeyWrappingIv = base64ToArrayBuffer(storedKeyWrappingIv); // Convert to ArrayBuffer
+
+                // Derive the wrapping key from the recovery phrase
+                const wrappingKey = await getPasswordKey(recoveryPhrase, unwrappedSalt);
+
+                // Unwrap (decrypt) the AES-GCM key
+                const aesGcmKey = await window.crypto.subtle.unwrapKey(
+                    "raw",
+                    unwrappedWrappedKey,
+                    wrappingKey,
+                    { name: "AES-GCM", iv: unwrappedKeyWrappingIv }, // Pass the stored key wrapping IV here
+                    { name: "AES-GCM", length: 256 },
+                    true,
+                    ["encrypt", "decrypt"]
+                );
+
+                // Decrypt the file content
+                const decryptedContent = await window.crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: unwrappedIv },
+                    aesGcmKey,
+                    unwrappedEncryptedData
+                );
+
+                const decryptedBlob = new Blob([decryptedContent], { type: 'application/octet-stream' });
+                const downloadUrl = URL.createObjectURL(decryptedBlob);
+
+                downloadLink.href = downloadUrl;
+                downloadLink.download = `decrypted_${storedOriginalFileName || 'file'}`;
+                downloadArea.classList.remove('hidden');
+                statusMessage.textContent = 'File decrypted successfully!';
+                statusMessage.style.color = '#06D6A0';
+                recoveryPhraseInput.value = ''; // Clear phrase on successful decryption
+
+            } catch (error) {
+                console.error('Decryption failed:', error);
+                statusMessage.textContent = `Decryption failed: ${error.message || error}. Ensure the correct recovery phrase was used.`;
+                statusMessage.style.color = '#FF6B6B';
+                downloadArea.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
