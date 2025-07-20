@@ -22,10 +22,24 @@
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
         }
+        /* Custom scrollbar for file list */
+        .file-list-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .file-list-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .file-list-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .file-list-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
     </style>
 </head>
 <body class="text-gray-800 min-h-screen p-4">
-    <!-- Navigation Bar (shown when logged in) -->
     <nav id="navbar" class="hidden bg-white bg-opacity-90 backdrop-blur-md rounded-lg shadow-lg p-4 mb-6">
         <div class="flex justify-between items-center">
             <div class="flex items-center space-x-2">
@@ -43,7 +57,6 @@
         </div>
     </nav>
 
-    <!-- Authentication Section -->
     <div id="authSection" class="flex items-center justify-center min-h-screen">
         <div class="auth-container rounded-2xl shadow-xl p-8 w-full max-w-md">
             <div class="text-center mb-8">
@@ -54,7 +67,6 @@
                 <p class="text-gray-600">Secure file encryption platform</p>
             </div>
 
-            <!-- Auth Tabs -->
             <div class="flex bg-gray-100 rounded-lg p-1 mb-6">
                 <button class="auth-tab flex-1 py-2 px-4 rounded-md font-medium transition-all active" data-tab="login">
                     Login
@@ -64,7 +76,6 @@
                 </button>
             </div>
 
-            <!-- Login Form -->
             <form id="loginForm" class="auth-form space-y-4">
                 <div>
                     <label for="loginUsername" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
@@ -82,7 +93,6 @@
                 </button>
             </form>
 
-            <!-- Register Form -->
             <form id="registerForm" class="auth-form space-y-4 hidden">
                 <div>
                     <label for="registerUsername" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
@@ -105,12 +115,10 @@
                 </button>
             </form>
 
-            <!-- Auth Message -->
             <div id="authMessage" class="mt-4 p-3 rounded-lg text-center hidden"></div>
         </div>
     </div>
 
-    <!-- Main Application (File Encryption) -->
     <div id="mainApp" class="hidden max-w-4xl mx-auto">
         <div class="main-container rounded-2xl shadow-xl p-8">
             <div class="text-center mb-8">
@@ -119,8 +127,9 @@
             </div>
 
             <div class="space-y-6">
+                <!-- File Input Section -->
                 <div>
-                    <label for="fileInput" class="block text-sm font-medium text-gray-700 mb-2">Select File:</label>
+                    <label for="fileInput" class="block text-sm font-medium text-gray-700 mb-2">Select File for Encryption or Decryption:</label>
                     <div class="flex items-center space-x-2">
                         <input type="file" id="fileInput" class="block w-full text-sm text-gray-500
                             file:mr-4 file:py-2 file:px-4
@@ -140,6 +149,7 @@
                     </div>
                 </div>
 
+                <!-- Recovery Phrase Input -->
                 <div>
                     <label for="recoveryPhrase" class="block text-sm font-medium text-gray-700 mb-2">Recovery Phrase (e.g., a strong password):</label>
                     <input type="password" id="recoveryPhrase" placeholder="Enter your secret phrase"
@@ -147,6 +157,7 @@
                                   focus:outline-none focus:ring-[#118AB2] focus:border-[#118AB2] sm:text-sm" />
                 </div>
 
+                <!-- Action Buttons -->
                 <div class="flex flex-col sm:flex-row gap-4">
                     <button id="encryptButton"
                             class="flex-1 bg-[#118AB2] text-white py-2 px-4 rounded-md font-semibold
@@ -156,12 +167,13 @@
                     <button id="decryptButton"
                             class="flex-1 bg-[#FF6B6B] text-white py-2 px-4 rounded-md font-semibold
                                    hover:bg-[#FFD166] transition-colors duration-200 shadow-md">
-                        Decrypt File
+                        Decrypt Selected File
                     </button>
                 </div>
 
                 <div id="statusMessage" class="text-center text-sm text-gray-600 mt-4"></div>
                 
+                <!-- Download Areas -->
                 <div id="downloadEncryptedArea" class="text-center mt-4 hidden">
                     <a id="downloadEncryptedLink" href="#" download class="inline-block bg-[#118AB2] text-white py-2 px-6 rounded-md font-semibold
                                                                   hover:bg-[#06D6A0] transition-colors duration-200 shadow-md">
@@ -175,487 +187,19 @@
                         Download Decrypted File
                     </a>
                 </div>
+
+                <!-- User Files List Section - NEW -->
+                <div class="mt-8 pt-6 border-t border-gray-200">
+                    <h2 class="text-2xl font-bold text-[#073B4C] mb-4">Your Encrypted Files</h2>
+                    <div id="userFilesList" class="space-y-3 max-h-60 overflow-y-auto p-2 rounded-md bg-gray-50 file-list-container">
+                        <p class="text-gray-500 text-center" id="noFilesMessage">No files encrypted yet. Encrypt one above!</p>
+                        <!-- Files will be dynamically loaded here -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <script>
-        // Authentication and Application Logic
-        class SecureVault {
-            constructor() {
-                this.currentUser = null;
-                this.apiBase = '/api';
-                this.init();
-            }
-
-            init() {
-                this.setupEventListeners();
-                this.checkAuthStatus();
-            }
-
-            setupEventListeners() {
-                // Auth tab switching
-                document.querySelectorAll('.auth-tab').forEach(tab => {
-                    tab.addEventListener('click', (e) => this.switchAuthTab(e.target.dataset.tab));
-                });
-
-                // Auth forms
-                document.getElementById('loginForm').addEventListener('submit', (e) => this.handleLogin(e));
-                document.getElementById('registerForm').addEventListener('submit', (e) => this.handleRegister(e));
-
-                // Logout
-                document.getElementById('logoutBtn').addEventListener('click', () => this.logout());
-
-                // File encryption functionality
-                this.setupFileEncryption();
-            }
-
-            checkAuthStatus() {
-                const userData = sessionStorage.getItem('userData');
-                if (userData) {
-                    this.currentUser = JSON.parse(userData);
-                    this.showMainApp();
-                } else {
-                    this.showAuth();
-                }
-            }
-
-            switchAuthTab(tab) {
-                document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active', 'bg-white', 'shadow-sm'));
-                document.querySelectorAll('.auth-form').forEach(f => f.classList.add('hidden'));
-
-                const activeTab = document.querySelector(`[data-tab="${tab}"]`);
-                activeTab.classList.add('active', 'bg-white', 'shadow-sm');
-                
-                document.getElementById(`${tab}Form`).classList.remove('hidden');
-                this.clearAuthMessage();
-            }
-
-            async handleLogin(e) {
-                e.preventDefault();
-                const form = e.target;
-                const submitBtn = form.querySelector('button[type="submit"]');
-                
-                const username = document.getElementById('loginUsername').value.trim();
-                const password = document.getElementById('loginPassword').value;
-
-                if (!username || !password) {
-                    this.showAuthMessage('Please fill in all fields', 'error');
-                    return;
-                }
-
-                this.setButtonLoading(submitBtn, true);
-
-                try {
-                    const response = await fetch(`${this.apiBase}/login`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username, password })
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok) {
-                        this.currentUser = { user_id: data.user_id, username: username };
-                        sessionStorage.setItem('userData', JSON.stringify(this.currentUser));
-                        
-                        this.showAuthMessage('Login successful!', 'success');
-                        setTimeout(() => this.showMainApp(), 1000);
-                    } else {
-                        this.showAuthMessage(data.error || 'Login failed', 'error');
-                    }
-                } catch (error) {
-                    this.showAuthMessage('Network error. Please try again.', 'error');
-                } finally {
-                    this.setButtonLoading(submitBtn, false);
-                }
-            }
-
-            async handleRegister(e) {
-                e.preventDefault();
-                const form = e.target;
-                const submitBtn = form.querySelector('button[type="submit"]');
-
-                const username = document.getElementById('registerUsername').value.trim();
-                const password = document.getElementById('registerPassword').value;
-                const confirmPassword = document.getElementById('confirmPassword').value;
-
-                if (!username || !password || !confirmPassword) {
-                    this.showAuthMessage('Please fill in all fields', 'error');
-                    return;
-                }
-
-                if (password !== confirmPassword) {
-                    this.showAuthMessage('Passwords do not match', 'error');
-                    return;
-                }
-
-                if (password.length < 6) {
-                    this.showAuthMessage('Password must be at least 6 characters', 'error');
-                    return;
-                }
-
-                this.setButtonLoading(submitBtn, true);
-
-                try {
-                    const response = await fetch(`${this.apiBase}/register`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username, password })
-                    });
-
-                    const data = await response.json();
-
-                    if (response.ok) {
-                        this.showAuthMessage('Account created successfully! You can now log in.', 'success');
-                        form.reset();
-                        setTimeout(() => this.switchAuthTab('login'), 2000);
-                    } else {
-                        this.showAuthMessage(data.error || 'Registration failed', 'error');
-                    }
-                } catch (error) {
-                    this.showAuthMessage('Network error. Please try again.', 'error');
-                } finally {
-                    this.setButtonLoading(submitBtn, false);
-                }
-            }
-
-            logout() {
-                sessionStorage.removeItem('userData');
-                this.currentUser = null;
-                this.showAuth();
-                this.clearFileData();
-            }
-
-            showAuth() {
-                document.getElementById('authSection').classList.remove('hidden');
-                document.getElementById('mainApp').classList.add('hidden');
-                document.getElementById('navbar').classList.add('hidden');
-            }
-
-            showMainApp() {
-                document.getElementById('authSection').classList.add('hidden');
-                document.getElementById('mainApp').classList.remove('hidden');
-                document.getElementById('navbar').classList.remove('hidden');
-                document.getElementById('welcomeUser').textContent = `Welcome, ${this.currentUser.username}`;
-            }
-
-            setButtonLoading(button, loading) {
-                const btnText = button.querySelector('.btn-text');
-                const btnLoading = button.querySelector('.btn-loading');
-                
-                if (loading) {
-                    button.disabled = true;
-                    btnText.classList.add('hidden');
-                    btnLoading.classList.remove('hidden');
-                } else {
-                    button.disabled = false;
-                    btnText.classList.remove('hidden');
-                    btnLoading.classList.add('hidden');
-                }
-            }
-
-            showAuthMessage(message, type) {
-                const messageEl = document.getElementById('authMessage');
-                messageEl.textContent = message;
-                messageEl.className = `mt-4 p-3 rounded-lg text-center ${type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
-                messageEl.classList.remove('hidden');
-            }
-
-            clearAuthMessage() {
-                document.getElementById('authMessage').classList.add('hidden');
-            }
-
-            clearFileData() {
-                // Clear all file encryption related data
-                localStorage.removeItem('encryptedData');
-                localStorage.removeItem('wrappedKey');
-                localStorage.removeItem('iv');
-                localStorage.removeItem('salt');
-                localStorage.removeItem('keyWrappingIv');
-                localStorage.removeItem('originalFileName');
-            }
-
-            // File Encryption Setup (your existing code)
-            setupFileEncryption() {
-                let encryptedData = null;
-                let wrappedKey = null;
-                let iv = null;
-                let salt = null;
-                let keyWrappingIv = null;
-                let originalFileName = '';
-
-                const fileInput = document.getElementById('fileInput');
-                const recoveryPhraseInput = document.getElementById('recoveryPhrase');
-                const statusMessage = document.getElementById('statusMessage');
-                const downloadArea = document.getElementById('downloadArea');
-                const downloadLink = document.getElementById('downloadLink');
-                const downloadEncryptedArea = document.getElementById('downloadEncryptedArea');
-                const downloadEncryptedLink = document.getElementById('downloadEncryptedLink');
-                const clearFileButton = document.getElementById('clearFileButton');
-                const selectedFileNameSpan = document.getElementById('selectedFileName');
-
-                const generateRandomBytes = (length) => {
-                    return window.crypto.getRandomValues(new Uint8Array(length));
-                };
-
-                const arrayBufferToBase64 = (buffer) => {
-                    let binary = '';
-                    const bytes = new Uint8Array(buffer);
-                    const len = bytes.byteLength;
-                    for (let i = 0; i < len; i++) {
-                        binary += String.fromCharCode(bytes[i]);
-                    }
-                    return window.btoa(binary);
-                };
-
-                const base64ToArrayBuffer = (base64) => {
-                    const binary_string = window.atob(base64);
-                    const len = binary_string.length;
-                    const bytes = new Uint8Array(len);
-                    for (let i = 0; i < len; i++) {
-                        bytes[i] = binary_string.charCodeAt(i);
-                    }
-                    return bytes.buffer;
-                };
-
-                const getPasswordKey = async (password, saltBytes) => {
-                    const enc = new TextEncoder();
-                    const keyMaterial = await window.crypto.subtle.importKey(
-                        "raw",
-                        enc.encode(password),
-                        { name: "PBKDF2" },
-                        false,
-                        ["deriveKey"]
-                    );
-                    return window.crypto.subtle.deriveKey(
-                        {
-                            name: "PBKDF2",
-                            salt: saltBytes,
-                            iterations: 100000,
-                            hash: "SHA-256",
-                        },
-                        keyMaterial,
-                        { name: "AES-GCM", length: 256 },
-                        true,
-                        ["wrapKey", "unwrapKey"]
-                    );
-                };
-
-                const clearCryptoDataAndUIState = () => {
-                    encryptedData = null;
-                    wrappedKey = null;
-                    iv = null;
-                    salt = null;
-                    keyWrappingIv = null;
-                    originalFileName = '';
-                    localStorage.removeItem('encryptedData');
-                    localStorage.removeItem('wrappedKey');
-                    localStorage.removeItem('iv');
-                    localStorage.removeItem('salt');
-                    localStorage.removeItem('keyWrappingIv');
-                    localStorage.removeItem('originalFileName');
-                    statusMessage.textContent = '';
-                    downloadArea.classList.add('hidden');
-                    downloadEncryptedArea.classList.add('hidden');
-                };
-
-                fileInput.addEventListener('change', () => {
-                    clearCryptoDataAndUIState();
-                    if (fileInput.files.length > 0) {
-                        selectedFileNameSpan.textContent = fileInput.files[0].name;
-                    } else {
-                        selectedFileNameSpan.textContent = 'No file selected.';
-                    }
-                });
-
-                clearFileButton.addEventListener('click', () => {
-                    clearCryptoDataAndUIState();
-                    fileInput.value = '';
-                    selectedFileNameSpan.textContent = 'No file selected.';
-                    statusMessage.textContent = 'File selection cleared.';
-                    statusMessage.style.color = '#FF6B6B';
-                });
-
-                // Your existing encrypt and decrypt button event listeners go here
-                // (I'll include the encrypt button as an example)
-                document.getElementById('encryptButton').addEventListener('click', async () => {
-                    downloadArea.classList.add('hidden');
-                    downloadEncryptedArea.classList.add('hidden');
-
-                    const file = fileInput.files[0];
-                    const recoveryPhrase = recoveryPhraseInput.value.trim();
-
-                    if (!file) {
-                        statusMessage.textContent = 'Please select a file.';
-                        statusMessage.style.color = '#FF6B6B';
-                        return;
-                    }
-                    if (!recoveryPhrase) {
-                        statusMessage.textContent = 'Please enter a recovery phrase.';
-                        statusMessage.style.color = '#FF6B6B';
-                        return;
-                    }
-
-                    statusMessage.textContent = 'Encrypting... Please wait.';
-                    statusMessage.style.color = '#118AB2';
-
-                    try {
-                        originalFileName = file.name;
-                        const fileReader = new FileReader();
-                        fileReader.onload = async (e) => {
-                            const fileContent = e.target.result;
-
-                            const aesGcmKey = await window.crypto.subtle.generateKey(
-                                { name: "AES-GCM", length: 256 },
-                                true,
-                                ["encrypt", "decrypt"]
-                            );
-
-                            iv = generateRandomBytes(12);
-                            encryptedData = await window.crypto.subtle.encrypt(
-                                { name: "AES-GCM", iv: iv },
-                                aesGcmKey,
-                                fileContent
-                            );
-
-                            salt = generateRandomBytes(16);
-                            const wrappingKey = await getPasswordKey(recoveryPhrase, salt);
-                            keyWrappingIv = generateRandomBytes(12);
-
-                            wrappedKey = await window.crypto.subtle.wrapKey(
-                                "raw",
-                                aesGcmKey,
-                                wrappingKey,
-                                { name: "AES-GCM", iv: keyWrappingIv }
-                            );
-
-                            statusMessage.textContent = 'File encrypted successfully! Ready for decryption.';
-                            statusMessage.style.color = '#06D6A0';
-                            recoveryPhraseInput.value = '';
-
-                            // Save to backend
-                            const keyData = {
-                                userId: this.currentUser.user_id,
-                                fileId: crypto.randomUUID(),
-                                wrappedKey: arrayBufferToBase64(wrappedKey),
-                                iv: arrayBufferToBase64(iv),
-                                salt: arrayBufferToBase64(salt),
-                                keyWrappingIv: arrayBufferToBase64(keyWrappingIv),
-                                originalFileName: originalFileName
-                            };
-
-                            try {
-                                const response = await fetch(`${this.apiBase}/keys`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(keyData)
-                                });
-
-                                if (response.ok) {
-                                    console.log('Key saved to backend successfully');
-                                }
-                            } catch (error) {
-                                console.error('Failed to save key to backend:', error);
-                            }
-
-                            localStorage.setItem('encryptedData', arrayBufferToBase64(encryptedData));
-                            localStorage.setItem('wrappedKey', arrayBufferToBase64(wrappedKey));
-                            localStorage.setItem('iv', arrayBufferToBase64(iv));
-                            localStorage.setItem('salt', arrayBufferToBase64(salt));
-                            localStorage.setItem('keyWrappingIv', arrayBufferToBase64(keyWrappingIv));
-                            localStorage.setItem('originalFileName', originalFileName);
-
-                            const encryptedBlob = new Blob([encryptedData], { type: 'application/octet-stream' });
-                            const encryptedDownloadUrl = URL.createObjectURL(encryptedBlob);
-                            downloadEncryptedLink.href = encryptedDownloadUrl;
-                            downloadEncryptedLink.download = `encrypted_${originalFileName || 'file'}.enc`;
-                            downloadEncryptedArea.classList.remove('hidden');
-                        };
-                        fileReader.readAsArrayBuffer(file);
-
-                    } catch (error) {
-                        console.error('Encryption failed:', error);
-                        statusMessage.textContent = `Encryption failed: ${error.message || error}. Check console for details.`;
-                        statusMessage.style.color = '#FF6B6B';
-                    }
-                });
-
-                // Add your decrypt button event listener here (similar to your existing code)
-                document.getElementById('decryptButton').addEventListener('click', async () => {
-                    const recoveryPhrase = recoveryPhraseInput.value.trim();
-
-                    if (!recoveryPhrase) {
-                        statusMessage.textContent = 'Please enter your recovery phrase.';
-                        statusMessage.style.color = '#FF6B6B';
-                        return;
-                    }
-
-                    const storedEncryptedData = localStorage.getItem('encryptedData');
-                    const storedWrappedKey = localStorage.getItem('wrappedKey');
-                    const storedIv = localStorage.getItem('iv');
-                    const storedSalt = localStorage.getItem('salt');
-                    const storedKeyWrappingIv = localStorage.getItem('keyWrappingIv');
-                    const storedOriginalFileName = localStorage.getItem('originalFileName');
-
-                    if (!storedEncryptedData || !storedWrappedKey || !storedIv || !storedSalt || !storedKeyWrappingIv) {
-                        statusMessage.textContent = 'No encrypted data found. Please encrypt a file first.';
-                        statusMessage.style.color = '#FF6B6B';
-                        return;
-                    }
-
-                    statusMessage.textContent = 'Decrypting... Please wait.';
-                    statusMessage.style.color = '#118AB2';
-
-                    try {
-                        const unwrappedIv = base64ToArrayBuffer(storedIv);
-                        const unwrappedSalt = base64ToArrayBuffer(storedSalt);
-                        const unwrappedEncryptedData = base64ToArrayBuffer(storedEncryptedData);
-                        const unwrappedWrappedKey = base64ToArrayBuffer(storedWrappedKey);
-                        const unwrappedKeyWrappingIv = base64ToArrayBuffer(storedKeyWrappingIv);
-
-                        const wrappingKey = await getPasswordKey(recoveryPhrase, unwrappedSalt);
-
-                        const aesGcmKey = await window.crypto.subtle.unwrapKey(
-                            "raw",
-                            unwrappedWrappedKey,
-                            wrappingKey,
-                            { name: "AES-GCM", iv: unwrappedKeyWrappingIv },
-                            { name: "AES-GCM", length: 256 },
-                            true,
-                            ["encrypt", "decrypt"]
-                        );
-
-                        const decryptedContent = await window.crypto.subtle.decrypt(
-                            { name: "AES-GCM", iv: unwrappedIv },
-                            aesGcmKey,
-                            unwrappedEncryptedData
-                        );
-
-                        const decryptedBlob = new Blob([decryptedContent], { type: 'application/octet-stream' });
-                        const downloadUrl = URL.createObjectURL(decryptedBlob);
-
-                        downloadLink.href = downloadUrl;
-                        downloadLink.download = `decrypted_${storedOriginalFileName || 'file'}`;
-                        downloadArea.classList.remove('hidden');
-                        statusMessage.textContent = 'File decrypted successfully!';
-                        statusMessage.style.color = '#06D6A0';
-                        recoveryPhraseInput.value = '';
-
-                    } catch (error) {
-                        console.error('Decryption failed:', error);
-                        statusMessage.textContent = `Decryption failed: ${error.message || error}. Ensure the correct recovery phrase was used.`;
-                        statusMessage.style.color = '#FF6B6B';
-                        downloadArea.classList.add('hidden');
-                    }
-                });
-            }
-        }
-
-        // Initialize the application
-        document.addEventListener('DOMContentLoaded', () => {
-            new SecureVault();
-        });
-    </script>
+    <script src="./script.js"></script>
 </body>
 </html>

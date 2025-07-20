@@ -1,12 +1,14 @@
 # backend/app.py
 import os
 import sqlite3
-from flask import Flask, send_from_directory, request, jsonify, g
+from flask import Flask, send_from_directory, request, jsonify, g, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 import uuid
 from werkzeug.security import generate_password_hash, check_password_hash
 import logging
+import base64
+from io import BytesIO
 
 # Load environment variables from .env file
 load_dotenv()
@@ -28,16 +30,18 @@ def get_db():
         g.db.row_factory = sqlite3.Row  # This allows us to access columns by name
     return g.db
 
+@app.teardown_appcontext
 def close_db(e=None):
-    """Close database connection."""
+    """Close database connection at the end of each request."""
     db = g.pop('db', None)
     if db is not None:
         db.close()
 
 def init_db():
-    """Initialize the database with required tables."""
+    """Initialize the database with the correct schema, including encrypted_data."""
     with app.app_context():
         db = get_db()
+        # Updated schema to include the encrypted_data column
         db.executescript('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,6 +60,7 @@ def init_db():
                 salt TEXT NOT NULL,
                 key_wrapping_iv TEXT NOT NULL,
                 original_file_name TEXT NOT NULL,
+                encrypted_data BLOB NOT NULL, -- Stores the actual encrypted file content
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, file_id),
                 FOREIGN KEY (user_id) REFERENCES users (user_id)
@@ -67,17 +72,11 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_wrapped_keys_file_id ON wrapped_keys(file_id);
         ''')
         db.commit()
-        logger.info("Database initialized successfully")
+        logger.info("Database initialized successfully with updated schema.")
 
 # Initialize database when app starts
 with app.app_context():
     init_db()
-
-# Register cleanup function
-@app.teardown_appcontext
-def close_db_connection(error):
-    """Close database connection at the end of each request."""
-    close_db(error)
 
 @app.route('/')
 def serve_index():
@@ -111,11 +110,7 @@ def register_user():
 
     db = get_db()
     
-    # Check if username already exists
-    existing_user = db.execute(
-        'SELECT id FROM users WHERE username = ?', (username,)
-    ).fetchone()
-    
+    existing_user = db.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
     if existing_user:
         return jsonify({'error': 'Username already exists'}), 409
 
@@ -164,30 +159,60 @@ def login_user():
 
 @app.route('/api/keys', methods=['POST'])
 def save_wrapped_key():
-    """API endpoint to save a wrapped key."""
-    data = request.json
+    """
+    API endpoint to save a wrapped key and the encrypted file data.
+    Expects a multipart/form-data request.
+    """
+    logger.info(f"Received POST to /api/keys")
+    logger.info(f"Request Content-Type: {request.headers.get('Content-Type')}")
+
+    # Log all form data received
+    logger.info(f"Form data received: {request.form}")
+    for key, value in request.form.items():
+        logger.info(f"  Form field - {key}: {value}")
+
+    # Log all files received
+    logger.info(f"Files received: {request.files}")
+    if not request.files:
+        logger.warning("No files were found in the request.files object.")
+        return jsonify({'error': 'No files were found in the request'}), 400 # More generic error here
+
+    if 'encryptedFile' not in request.files:
+        logger.error("The 'encryptedFile' part is specifically missing from request.files.")
+        return jsonify({'error': 'Missing encrypted file part. Backend could not find "encryptedFile" in request.files.'}), 400
     
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
-        
+    encrypted_file = request.files['encryptedFile']
+    
+    if encrypted_file.filename == '':
+        logger.error("Encrypted file was submitted but its filename is empty.")
+        return jsonify({'error': 'No selected file for encryption'}), 400
+
+    encrypted_data = encrypted_file.read()
+
+    if not encrypted_data:
+        logger.error("Encrypted file content is empty after reading.")
+        return jsonify({'error': 'Encrypted file is empty after read'}), 400
+
+    # Original metadata extraction (keep this)
+    data = request.form
     required_fields = ['wrappedKey', 'iv', 'salt', 'keyWrappingIv', 'originalFileName', 'fileId', 'userId']
-    
     if not all(field in data for field in required_fields):
         missing_fields = [field for field in required_fields if field not in data]
+        logger.error(f"Missing required metadata fields: {missing_fields}")
         return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
-    
+
     db = get_db()
     
-    # Verify user exists
     user = db.execute('SELECT id FROM users WHERE user_id = ?', (data['userId'],)).fetchone()
     if not user:
+        logger.error(f"Invalid user ID received: {data['userId']}")
         return jsonify({'error': 'Invalid user'}), 401
     
     try:
         db.execute('''
             INSERT INTO wrapped_keys 
-            (user_id, file_id, wrapped_key, iv, salt, key_wrapping_iv, original_file_name) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (user_id, file_id, wrapped_key, iv, salt, key_wrapping_iv, original_file_name, encrypted_data) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             data['userId'],
             data['fileId'],
@@ -195,22 +220,27 @@ def save_wrapped_key():
             data['iv'],
             data['salt'],
             data['keyWrappingIv'],
-            data['originalFileName']
+            data['originalFileName'],
+            encrypted_data 
         ))
         db.commit()
         
-        key_id = db.lastrowid
-        logger.info(f"Key saved for user {data['userId']}: {data['originalFileName']}")
-        return jsonify({'message': 'Key saved successfully', 'id': key_id}), 201
+        key_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        logger.info(f"Key and file saved for user {data['userId']}: {data['originalFileName']}")
+        return jsonify({'message': 'Key and file saved successfully', 'id': key_id}), 201
     except sqlite3.IntegrityError:
+        logger.error(f"IntegrityError: Key with file ID {data['fileId']} already exists for user {data['userId']}")
         return jsonify({'error': 'Key with this file ID already exists for this user'}), 409
     except Exception as e:
-        logger.error(f"Error saving key: {e}")
-        return jsonify({'error': 'Failed to save key'}), 500
-
+        logger.error(f"Error saving key and file: {e}", exc_info=True) # exc_info=True prints traceback
+        return jsonify({'error': 'Failed to save key and file'}), 500
+    
 @app.route('/api/keys/<string:user_id>/<string:file_id>', methods=['GET'])
 def get_wrapped_key(user_id, file_id):
-    """API endpoint to retrieve a wrapped key by user ID and file ID."""
+    """
+    API endpoint to retrieve a wrapped key and OTHER metadata by user ID and file ID.
+    This endpoint NO LONGER returns the encrypted_data.
+    """
     db = get_db()
     key_data = db.execute('''
         SELECT id, user_id, file_id, wrapped_key, iv, salt, key_wrapping_iv, original_file_name, created_at
@@ -228,14 +258,38 @@ def get_wrapped_key(user_id, file_id):
             'salt': key_data['salt'],
             'keyWrappingIv': key_data['key_wrapping_iv'],
             'originalFileName': key_data['original_file_name'],
-            'createdAt': key_data['created_at']
+            'createdAt': key_data['created_at'],
         }
         return jsonify(key_dict), 200
-    return jsonify({'error': 'Key not found'}), 404
+    return jsonify({'error': 'Key metadata not found for this file ID and user.'}), 404
+
+@app.route('/api/files/<string:user_id>/<string:file_id>', methods=['GET'])
+def get_encrypted_file_content(user_id, file_id):
+    """
+    NEW API endpoint to retrieve the raw encrypted file content (BLOB) by user ID and file ID.
+    """
+    db = get_db()
+    file_data = db.execute('''
+        SELECT encrypted_data, original_file_name
+        FROM wrapped_keys
+        WHERE user_id = ? AND file_id = ?
+    ''', (user_id, file_id)).fetchone()
+
+    if file_data:
+        # Use BytesIO to create a file-like object from the BLOB data
+        # send_file requires a file-like object or a path
+        return send_file(
+            BytesIO(file_data['encrypted_data']),
+            mimetype='application/octet-stream', # Generic binary type
+            as_attachment=True,
+            download_name=f"encrypted_{file_data['original_file_name']}.enc" # Suggest a download name
+        )
+    return jsonify({'error': 'Encrypted file content not found or not authorized.'}), 404
+
 
 @app.route('/api/keys/<string:user_id>', methods=['GET'])
 def list_user_keys(user_id):
-    """API endpoint to list all wrapped keys for a given user ID."""
+    """API endpoint to list all files (keys) for a given user ID."""
     db = get_db()
     user_keys = db.execute('''
         SELECT file_id, original_file_name, created_at
@@ -257,7 +311,7 @@ def list_user_keys(user_id):
 
 @app.route('/api/keys/<string:user_id>/<string:file_id>', methods=['DELETE'])
 def delete_wrapped_key(user_id, file_id):
-    """API endpoint to delete a wrapped key."""
+    """API endpoint to delete a wrapped key and its associated file data."""
     db = get_db()
     cursor = db.execute('''
         DELETE FROM wrapped_keys 
@@ -266,8 +320,8 @@ def delete_wrapped_key(user_id, file_id):
     db.commit()
     
     if cursor.rowcount > 0:
-        logger.info(f"Key deleted for user {user_id}, file {file_id}")
-        return jsonify({'message': 'Key deleted successfully'}), 200
+        logger.info(f"Key and file deleted for user {user_id}, file {file_id}")
+        return jsonify({'message': 'Key and file deleted successfully'}), 200
     return jsonify({'error': 'Key not found or not authorized'}), 404
 
 @app.route('/api/health', methods=['GET'])
