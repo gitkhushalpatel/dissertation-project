@@ -226,7 +226,7 @@
 <body>
     <div class="login-container">
         <div class="login-header">
-            <h1>Welcome</h1>
+            <h1>SecureVault</h1>
             <p>Sign in to your account or create a new one</p>
         </div>
 
@@ -363,7 +363,7 @@
             checkPasswordStrength(e.target.value);
         });
         
-        // Login form submission
+        // Login form submission - FIXED VERSION
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -387,19 +387,24 @@
                 
                 if (response.ok) {
                     showMessage('Login successful! Redirecting...', 'success');
-                    // Store user data in sessionStorage
-                    sessionStorage.setItem('userId', data.user_id);
-                    sessionStorage.setItem('username', username);
                     
-                    // Redirect to main application after a short delay
+                    // Store user data in the format expected by main app
+                    const userData = {
+                        user_id: data.user_id,
+                        username: username
+                    };
+                    sessionStorage.setItem('userData', JSON.stringify(userData));
+                    
+                    // Redirect to main application (index.html)
                     setTimeout(() => {
-                        window.location.href = '/login.html'; // Change this to your main app page
+                        window.location.href = '/'; // Fixed: redirect to main app, not login.html
                     }, 1500);
                 } else {
                     showMessage(data.error || 'Login failed', 'error');
                 }
             } catch (error) {
                 showMessage('Connection error. Please try again.', 'error');
+                console.error('Login error:', error);
             } finally {
                 setButtonLoading(loginBtn, false);
             }
@@ -450,6 +455,7 @@
                 }
             } catch (error) {
                 showMessage('Connection error. Please try again.', 'error');
+                console.error('Registration error:', error);
             } finally {
                 setButtonLoading(registerBtn, false);
             }
@@ -464,6 +470,15 @@
                 e.target.setCustomValidity('Passwords do not match');
             } else {
                 e.target.setCustomValidity('');
+            }
+        });
+
+        // Check if user is already logged in
+        window.addEventListener('DOMContentLoaded', function() {
+            const userData = sessionStorage.getItem('userData');
+            if (userData) {
+                // User is already logged in, redirect to main app
+                window.location.href = '/';
             }
         });
     </script>

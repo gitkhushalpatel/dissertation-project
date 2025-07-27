@@ -127,6 +127,34 @@
             </div>
 
             <div class="space-y-6">
+                <!-- Google Drive Integration Section -->
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-lg font-semibold text-blue-800">Google Drive Integration</h3>
+                        <div id="driveStatus" class="text-sm">
+                            <span id="driveStatusText" class="text-gray-600">Checking connection...</span>
+                        </div>
+                    </div>
+                    
+                    <div id="driveNotConnected" class="hidden">
+                        <p class="text-sm text-gray-600 mb-3">Connect your Google Drive to store encrypted files in the cloud.</p>
+                        <button id="connectDriveBtn" 
+                                class="bg-blue-500 text-white py-2 px-4 rounded-md font-semibold hover:bg-blue-600 transition-colors">
+                            <span class="mr-2">📁</span>Connect Google Drive
+                        </button>
+                    </div>
+                    
+                    <div id="driveConnected" class="hidden">
+                        <p class="text-sm text-green-600 mb-3">✅ Google Drive connected successfully!</p>
+                        <div class="flex space-x-2">
+                            <button id="disconnectDriveBtn" 
+                                    class="bg-red-500 text-white py-2 px-4 rounded-md font-semibold hover:bg-red-600 transition-colors text-sm">
+                                Disconnect
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- File Input Section -->
                 <div>
                     <label for="fileInput" class="block text-sm font-medium text-gray-700 mb-2">Select File for Encryption or Decryption:</label>
@@ -162,7 +190,13 @@
                     <button id="encryptButton"
                             class="flex-1 bg-[#118AB2] text-white py-2 px-4 rounded-md font-semibold
                                    hover:bg-[#06D6A0] transition-colors duration-200 shadow-md">
-                        Encrypt File
+                        Encrypt File (Local)
+                    </button>
+                    <button id="encryptToDriveButton"
+                            class="flex-1 bg-[#4285F4] text-white py-2 px-4 rounded-md font-semibold
+                                   hover:bg-[#3367D6] transition-colors duration-200 shadow-md disabled:opacity-50"
+                            disabled>
+                        <span class="mr-2">📁</span>Encrypt to Google Drive
                     </button>
                     <button id="decryptButton"
                             class="flex-1 bg-[#FF6B6B] text-white py-2 px-4 rounded-md font-semibold
@@ -188,7 +222,7 @@
                     </a>
                 </div>
 
-                <!-- User Files List Section - NEW -->
+                <!-- User Files List Section -->
                 <div class="mt-8 pt-6 border-t border-gray-200">
                     <h2 class="text-2xl font-bold text-[#073B4C] mb-4">Your Encrypted Files</h2>
                     <div id="userFilesList" class="space-y-3 max-h-60 overflow-y-auto p-2 rounded-md bg-gray-50 file-list-container">
