@@ -1,13 +1,20 @@
 // frontend/script.js
 
-// --- DOM Elements (Adjusted to match index.html IDs) ---
+// --- Global Variables ---
+const API_BASE_URL = 'http://127.0.0.1:5000/api';
+let currentUser = null;
+let selectedFileIdForDecryption = null;
+let selectedFileStorageLocation = null;
+let isGoogleDriveConnected = false;
+let googleAuthWindow = null;
+
+// --- DOM Elements ---
 const loginForm = document.getElementById('loginForm');
 const registerForm = document.getElementById('registerForm');
-
-// Main app elements from index.html
 const fileInput = document.getElementById('fileInput');
 const recoveryPhraseInput = document.getElementById('recoveryPhrase');
 const encryptButton = document.getElementById('encryptButton');
+const encryptToDriveButton = document.getElementById('encryptToDriveButton');
 const decryptButton = document.getElementById('decryptButton');
 const statusMessageDiv = document.getElementById('statusMessage');
 const downloadEncryptedArea = document.getElementById('downloadEncryptedArea');
@@ -25,57 +32,42 @@ const logoutButton = document.getElementById('logoutBtn');
 const welcomeUserSpan = document.getElementById('welcomeUser');
 const authMessageDiv = document.getElementById('authMessage');
 
+// Auth tabs and forms
 const authTabs = document.querySelectorAll('.auth-tab');
 const authForms = document.querySelectorAll('.auth-form');
 
-// Google Drive related DOM elements
+// Google Drive elements
 const connectDriveBtn = document.getElementById('connectDriveBtn');
 const disconnectDriveBtn = document.getElementById('disconnectDriveBtn');
-const encryptToDriveButton = document.getElementById('encryptToDriveButton');
 const driveStatusText = document.getElementById('driveStatusText');
 const driveNotConnected = document.getElementById('driveNotConnected');
 const driveConnected = document.getElementById('driveConnected');
 
-// New DOM elements for file listing
+// File list elements
 const userFilesListDiv = document.getElementById('userFilesList');
 const noFilesMessage = document.getElementById('noFilesMessage');
-
-const API_BASE_URL = 'http://127.0.0.1:5000/api';
-
-// Global state for current user and selected file for decryption
-let currentUser = null;
-let selectedFileIdForDecryption = null; // Stores the fileId of the file selected from the list
-let selectedFileStorageLocation = null; // Stores storage location (local or google_drive)
-
-// Google Drive state
-let isGoogleDriveConnected = false;
-let googleAuthWindow = null;
 
 // --- Utility Functions ---
 
 /**
- * Displays a message to the user within the main app section.
- * @param {string} text - The message to display.
- * @param {'success' | 'error' | 'info'} type - The type of message.
+ * Shows a status message to the user
  */
 function showStatusMessage(text, type) {
     if (statusMessageDiv) {
         statusMessageDiv.textContent = text;
-        let colorClass = 'text-gray-600'; // Default for 'info' or general
+        let colorClass = 'text-gray-600';
         if (type === 'error') {
             colorClass = 'text-red-600';
         } else if (type === 'success') {
             colorClass = 'text-green-600';
         }
         statusMessageDiv.className = `text-center text-sm mt-4 ${colorClass}`;
-        setTimeout(() => statusMessageDiv.textContent = '', 5000); // Clear after 5 seconds
+        setTimeout(() => statusMessageDiv.textContent = '', 5000);
     }
 }
 
 /**
- * Displays a message to the user within the authentication section.
- * @param {string} message - The message to display.
- * @param {string} type - 'success' or 'error'.
+ * Shows authentication messages
  */
 function showAuthMessage(message, type) {
     if (authMessageDiv) {
@@ -92,17 +84,14 @@ function clearAuthMessage() {
 }
 
 /**
- * Generates a a V4 UUID (Universally Unique Identifier).
- * @returns {string} A new UUID string.
+ * Generates a UUID for file identification
  */
 function generateUUID() {
-    return window.crypto.randomUUID(); // Modern browsers support this
+    return 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
 /**
- * Converts an ArrayBuffer to a Base64 string.
- * @param {ArrayBuffer} buffer - The buffer to convert.
- * @returns {string} The Base64 encoded string.
+ * Converts ArrayBuffer to Base64
  */
 function bufferToBase64(buffer) {
     let binary = '';
@@ -115,9 +104,7 @@ function bufferToBase64(buffer) {
 }
 
 /**
- * Converts a Base64 string to an ArrayBuffer.
- * @param {string} base64 - The Base64 string to convert.
- * @returns {ArrayBuffer} The decoded ArrayBuffer.
+ * Converts Base64 to ArrayBuffer
  */
 function base64ToBuffer(base64) {
     const binary_string = window.atob(base64);
@@ -129,23 +116,17 @@ function base64ToBuffer(base64) {
     return bytes.buffer;
 }
 
-// --- Authentication UI Logic ---
+// --- Authentication Functions ---
 
-/**
- * Updates the UI after a successful login.
- */
 function updateUIForLogin() {
     if (authSection) authSection.classList.add('hidden');
     if (mainApp) mainApp.classList.remove('hidden');
     if (navbar) navbar.classList.remove('hidden');
     if (welcomeUserSpan) welcomeUserSpan.textContent = `Welcome, ${currentUser.username}`;
-    loadUserFiles(); // Load user's files after login
-    checkGoogleDriveStatus(); // Check Google Drive status
+    loadUserFiles();
+    checkGoogleDriveStatus();
 }
 
-/**
- * Updates the UI after a logout.
- */
 function updateUIForLogout() {
     if (authSection) authSection.classList.remove('hidden');
     if (mainApp) mainApp.classList.add('hidden');
@@ -154,13 +135,9 @@ function updateUIForLogout() {
     if (userFilesListDiv) {
         userFilesListDiv.innerHTML = '<p class="text-gray-500 text-center" id="noFilesMessage">No files encrypted yet. Encrypt one above!</p>';
     }
-    switchAuthTab('login'); // Show login form after logout
+    switchAuthTab('login');
 }
 
-/**
- * Toggles between login and registration forms.
- * @param {string} tabToActivate - 'login' or 'register'.
- */
 function switchAuthTab(tabToActivate) {
     authTabs.forEach(tab => tab.classList.remove('active', 'bg-white', 'shadow-sm'));
     authForms.forEach(form => form.classList.add('hidden'));
@@ -175,105 +152,6 @@ function switchAuthTab(tabToActivate) {
         targetForm.classList.remove('hidden');
     }
     clearAuthMessage();
-}
-
-// --- Authentication Event Handlers ---
-
-if (loginForm) {
-    loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const submitBtn = e.target.querySelector('button[type="submit"]');
-        const username = document.getElementById('loginUsername').value.trim();
-        const password = document.getElementById('loginPassword').value;
-
-        if (!username || !password) {
-            showAuthMessage('Please fill in all fields', 'error');
-            return;
-        }
-
-        setButtonLoading(submitBtn, true);
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                currentUser = { user_id: data.user_id, username: username };
-                sessionStorage.setItem('userData', JSON.stringify(currentUser));
-                
-                showAuthMessage('Login successful!', 'success');
-                setTimeout(() => updateUIForLogin(), 1000);
-            } else {
-                showAuthMessage(data.error || 'Login failed', 'error');
-            }
-        } catch (error) {
-            showAuthMessage('Network error. Please try again.', 'error');
-        } finally {
-            setButtonLoading(submitBtn, false);
-        }
-    });
-}
-
-if (registerForm) {
-    registerForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const submitBtn = e.target.querySelector('button[type="submit"]');
-        const username = document.getElementById('registerUsername').value.trim();
-        const password = document.getElementById('registerPassword').value;
-        const confirmPassword = document.getElementById('confirmPassword').value;
-
-        if (!username || !password || !confirmPassword) {
-            showAuthMessage('Please fill in all fields', 'error');
-            return;
-        }
-
-        if (password !== confirmPassword) {
-            showAuthMessage('Passwords do not match', 'error');
-            return;
-        }
-
-        if (password.length < 6) {
-            showAuthMessage('Password must be at least 6 characters', 'error');
-            return;
-        }
-
-        setButtonLoading(submitBtn, true);
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                showAuthMessage('Account created successfully! You can now log in.', 'success');
-                e.target.reset();
-                setTimeout(() => switchAuthTab('login'), 2000);
-            } else {
-                showAuthMessage(data.error || 'Registration failed', 'error');
-            }
-        } catch (error) {
-            showAuthMessage('Network error. Please try again.', 'error');
-        } finally {
-            setButtonLoading(submitBtn, false);
-        }
-    });
-}
-
-if (logoutButton) {
-    logoutButton.addEventListener('click', () => {
-        sessionStorage.removeItem('userData');
-        currentUser = null;
-        updateUIForLogout();
-    });
 }
 
 function setButtonLoading(button, loading) {
@@ -291,6 +169,30 @@ function setButtonLoading(button, loading) {
             if (btnLoading) btnLoading.classList.add('hidden');
         }
     }
+}
+
+// --- Crypto Functions ---
+
+async function deriveKey(password, salt) {
+    const masterKey = await window.crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(password),
+        { name: 'PBKDF2' },
+        false,
+        ['deriveKey']
+    );
+    return window.crypto.subtle.deriveKey(
+        {
+            name: 'PBKDF2',
+            salt: salt,
+            iterations: 100000,
+            hash: 'SHA-256',
+        },
+        masterKey,
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['wrapKey', 'unwrapKey']
+    );
 }
 
 // --- Google Drive Functions ---
@@ -427,37 +329,213 @@ async function disconnectGoogleDrive() {
     }
 }
 
-// --- Crypto Functions ---
+// --- File Management Functions ---
 
-/**
- * Derives a key from a password and salt using PBKDF2.
- * @param {string} password - The user's password.
- * @param {Uint8Array} salt - The salt for key derivation.
- * @returns {Promise<CryptoKey>} The derived CryptoKey.
- */
-async function deriveKey(password, salt) {
-    const masterKey = await window.crypto.subtle.importKey(
-        'raw',
-        new TextEncoder().encode(password),
-        { name: 'PBKDF2' },
-        false,
-        ['deriveKey']
-    );
-    return window.crypto.subtle.deriveKey(
-        {
-            name: 'PBKDF2',
-            salt: salt,
-            iterations: 100000,
-            hash: 'SHA-256',
-        },
-        masterKey,
-        { name: 'AES-GCM', length: 256 },
-        true,
-        ['wrapKey', 'unwrapKey']
-    );
+async function loadUserFiles() {
+    if (!currentUser || !currentUser.user_id || !userFilesListDiv) {
+        if (userFilesListDiv) {
+            userFilesListDiv.innerHTML = '<p class="text-gray-500 text-center">Please log in to see your files.</p>';
+        }
+        return;
+    }
+
+    userFilesListDiv.innerHTML = '<p class="text-gray-500 text-center">Loading files...</p>';
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/keys/${currentUser.user_id}`);
+        const files = await response.json();
+
+        userFilesListDiv.innerHTML = '';
+
+        if (files.length === 0) {
+            userFilesListDiv.innerHTML = '<p class="text-gray-500 text-center">No files encrypted yet. Encrypt one above!</p>';
+            return;
+        }
+
+        files.forEach(file => {
+            const storageIcon = file.storageLocation === 'google_drive' ? '📁' : '💾';
+            const storageText = file.storageLocation === 'google_drive' ? 'Google Drive' : 'Local';
+            
+            const fileItem = document.createElement('div');
+            fileItem.className = 'flex items-center justify-between bg-white p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200';
+            fileItem.innerHTML = `
+                <div class="flex-1 overflow-hidden">
+                    <p class="font-semibold text-gray-800 truncate">${escapeHtml(file.originalFileName)}</p>
+                    <p class="text-xs text-gray-500">ID: <span class="font-mono text-blue-600">${file.fileId}</span></p>
+                    <p class="text-xs text-gray-500">
+                        <span class="mr-2">${storageIcon} ${storageText}</span>
+                        | Encrypted: ${new Date(file.createdAt).toLocaleString()}
+                    </p>
+                </div>
+                <div class="flex space-x-2 ml-4">
+                    <button onclick="selectFileForDecryption('${file.fileId}', '${file.storageLocation || 'local'}')"
+                            class="bg-[#06D6A0] text-white text-sm py-1 px-3 rounded-md font-semibold
+                                   hover:bg-[#118AB2] transition-colors duration-200 shadow-sm">
+                        Select for Decrypt
+                    </button>
+                    <button onclick="deleteFile('${file.fileId}')"
+                            class="bg-[#FF6B6B] text-white text-sm py-1 px-3 rounded-md font-semibold
+                                   hover:bg-[#FFD166] transition-colors duration-200 shadow-sm">
+                        Delete
+                    </button>
+                </div>
+            `;
+            userFilesListDiv.appendChild(fileItem);
+        });
+
+    } catch (error) {
+        console.error('Error loading files:', error);
+        if (userFilesListDiv) {
+            userFilesListDiv.innerHTML = `<p class="text-red-600 text-center">Failed to load files: ${error.message}</p>`;
+        }
+    }
 }
 
-// --- Event Listeners ---
+function selectFileForDecryption(fileId, storageLocation) {
+    selectedFileIdForDecryption = fileId;
+    selectedFileStorageLocation = storageLocation;
+    if (decryptButton) {
+        decryptButton.textContent = `Decrypt Selected File (${fileId.substring(0, 8)}... from ${storageLocation === 'google_drive' ? 'Drive' : 'Local'})`;
+    }
+    showStatusMessage(`File selected for decryption: ${fileId.substring(0, 8)}... from ${storageLocation === 'google_drive' ? 'Google Drive' : 'Local storage'}`, 'info');
+    if (fileInput) fileInput.value = '';
+    if (selectedFileNameSpan) selectedFileNameSpan.textContent = 'No file selected.';
+}
+
+async function deleteFile(fileId) {
+    if (!confirm('Are you sure you want to delete this file metadata and encrypted content? This action cannot be undone.')) {
+        return;
+    }
+
+    showStatusMessage('Deleting file...', 'info');
+    try {
+        const response = await fetch(`${API_BASE_URL}/keys/${currentUser.user_id}/${fileId}`, {
+            method: 'DELETE',
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || `Server error: ${response.statusText}`);
+        }
+
+        showStatusMessage('File deleted successfully!', 'success');
+        loadUserFiles();
+    } catch (error) {
+        console.error('Error deleting file:', error);
+        showStatusMessage(`Failed to delete file: ${error.message}.`, 'error');
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// --- Event Listeners Setup ---
+
+// Authentication Event Handlers
+if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+
+        if (!username || !password) {
+            showAuthMessage('Please fill in all fields', 'error');
+            return;
+        }
+
+        setButtonLoading(submitBtn, true);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                currentUser = { user_id: data.user_id, username: username };
+                sessionStorage.setItem('userData', JSON.stringify(currentUser));
+                
+                showAuthMessage('Login successful!', 'success');
+                setTimeout(() => updateUIForLogin(), 1000);
+            } else {
+                showAuthMessage(data.error || 'Login failed', 'error');
+            }
+        } catch (error) {
+            showAuthMessage('Network error. Please try again.', 'error');
+        } finally {
+            setButtonLoading(submitBtn, false);
+        }
+    });
+}
+
+if (registerForm) {
+    registerForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const username = document.getElementById('registerUsername').value.trim();
+        const password = document.getElementById('registerPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+
+        if (!username || !password || !confirmPassword) {
+            showAuthMessage('Please fill in all fields', 'error');
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            showAuthMessage('Passwords do not match', 'error');
+            return;
+        }
+
+        if (password.length < 6) {
+            showAuthMessage('Password must be at least 6 characters', 'error');
+            return;
+        }
+
+        setButtonLoading(submitBtn, true);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showAuthMessage('Account created successfully! You can now log in.', 'success');
+                e.target.reset();
+                setTimeout(() => switchAuthTab('login'), 2000);
+            } else {
+                showAuthMessage(data.error || 'Registration failed', 'error');
+            }
+        } catch (error) {
+            showAuthMessage('Network error. Please try again.', 'error');
+        } finally {
+            setButtonLoading(submitBtn, false);
+        }
+    });
+}
+
+if (logoutButton) {
+    logoutButton.addEventListener('click', () => {
+        sessionStorage.removeItem('userData');
+        currentUser = null;
+        updateUIForLogout();
+    });
+}
+
+// Auth tab switching
+authTabs.forEach(tab => {
+    tab.addEventListener('click', (e) => switchAuthTab(e.target.dataset.tab));
+});
 
 // Google Drive event listeners
 if (connectDriveBtn) {
@@ -471,17 +549,14 @@ if (disconnectDriveBtn) {
 // File input event listeners
 if (fileInput) {
     fileInput.addEventListener('change', () => {
-        // Clear previous crypto data and UI state on new file selection
         if (downloadArea) downloadArea.classList.add('hidden');
         if (downloadEncryptedArea) downloadEncryptedArea.classList.add('hidden');
-        if (statusMessageDiv) statusMessageDiv.textContent = ''; // Clear status message
-        selectedFileIdForDecryption = null; // Clear any previously selected file from list
-        if (decryptButton) decryptButton.textContent = 'Decrypt Selected File'; // Reset button text
+        if (statusMessageDiv) statusMessageDiv.textContent = '';
+        selectedFileIdForDecryption = null;
+        if (decryptButton) decryptButton.textContent = 'Decrypt Selected File';
 
         if (fileInput.files.length > 0) {
             if (selectedFileNameSpan) selectedFileNameSpan.textContent = fileInput.files[0].name;
-            // If a file is selected via input, we assume decryption will happen via this file
-            // and not from the list.
             if (decryptButton) decryptButton.textContent = 'Decrypt Uploaded File';
         } else {
             if (selectedFileNameSpan) selectedFileNameSpan.textContent = 'No file selected.';
@@ -492,14 +567,14 @@ if (fileInput) {
 
 if (clearFileButton) {
     clearFileButton.addEventListener('click', () => {
-        if (fileInput) fileInput.value = ''; // Clear the file input itself
+        if (fileInput) fileInput.value = '';
         if (selectedFileNameSpan) selectedFileNameSpan.textContent = 'No file selected.';
         if (downloadArea) downloadArea.classList.add('hidden');
         if (downloadEncryptedArea) downloadEncryptedArea.classList.add('hidden');
         showStatusMessage('File selection cleared.', 'info');
-        selectedFileIdForDecryption = null; // Clear selected file from list
+        selectedFileIdForDecryption = null;
         selectedFileStorageLocation = null;
-        if (decryptButton) decryptButton.textContent = 'Decrypt Selected File'; // Reset button text
+        if (decryptButton) decryptButton.textContent = 'Decrypt Selected File';
     });
 }
 
@@ -532,7 +607,7 @@ if (encryptButton) {
         showStatusMessage('Encrypting... Please wait.', 'info');
 
         try {
-            const fileDataBuffer = await file.arrayBuffer(); // Read file as ArrayBuffer
+            const fileDataBuffer = await file.arrayBuffer();
 
             const salt = window.crypto.getRandomValues(new Uint8Array(16));
             const keyWrappingIv = window.crypto.getRandomValues(new Uint8Array(12));
@@ -558,10 +633,10 @@ if (encryptButton) {
                 fileDataBuffer
             );
 
-            const fileId = generateUUID(); // Generate UUID for this file
+            const fileId = generateUUID();
 
             // Prepend fileId to the encrypted content for self-contained decryption
-            const fileIdBytes = new TextEncoder().encode(fileId + '|'); // Add a delimiter
+            const fileIdBytes = new TextEncoder().encode(fileId + '|');
             const combinedEncryptedData = new Uint8Array(fileIdBytes.byteLength + encryptedContentBuffer.byteLength);
             combinedEncryptedData.set(fileIdBytes, 0);
             combinedEncryptedData.set(new Uint8Array(encryptedContentBuffer), fileIdBytes.byteLength);
@@ -571,13 +646,13 @@ if (encryptButton) {
             // Prepare FormData for upload
             const formData = new FormData();
             formData.append('userId', currentUser.user_id);
-            formData.append('fileId', fileId); // Send fileId to backend for metadata
+            formData.append('fileId', fileId);
             formData.append('originalFileName', file.name);
             formData.append('wrappedKey', bufferToBase64(wrappedKey));
             formData.append('iv', bufferToBase64(iv));
             formData.append('salt', bufferToBase64(salt));
             formData.append('keyWrappingIv', bufferToBase64(keyWrappingIv));
-            formData.append('encryptedFile', encryptedContentBlob, file.name); // Append the actual encrypted file content (with prepended ID)
+            formData.append('encryptedFile', encryptedContentBlob, file.name);
 
             const response = await fetch(`${API_BASE_URL}/keys`, {
                 method: 'POST',
@@ -590,9 +665,9 @@ if (encryptButton) {
             }
 
             showStatusMessage('File encrypted and uploaded successfully!', 'success');
-            if (recoveryPhraseInput) recoveryPhraseInput.value = ''; // Clear recovery phrase after successful upload
+            if (recoveryPhraseInput) recoveryPhraseInput.value = '';
 
-            // Make encrypted file downloadable directly from frontend (optional, but good for testing)
+            // Make encrypted file downloadable
             const encryptedDownloadUrl = URL.createObjectURL(encryptedContentBlob);
             if (downloadEncryptedLink) {
                 downloadEncryptedLink.href = encryptedDownloadUrl;
@@ -600,7 +675,7 @@ if (encryptButton) {
             }
             if (downloadEncryptedArea) downloadEncryptedArea.classList.remove('hidden');
 
-            loadUserFiles(); // Reload the file list to show the newly encrypted file
+            loadUserFiles();
 
         } catch (error) {
             console.error('Encryption and upload failed:', error);
@@ -698,7 +773,7 @@ if (encryptToDriveButton) {
 
             showStatusMessage('File encrypted and uploaded to Google Drive successfully!', 'success');
             if (recoveryPhraseInput) recoveryPhraseInput.value = '';
-            loadUserFiles(); // Reload the file list to show the newly encrypted file
+            loadUserFiles();
 
         } catch (error) {
             console.error('Google Drive upload failed:', error);
@@ -724,11 +799,11 @@ if (decryptButton) {
 
         let fileIdToDecrypt = null;
         let encryptedContentBuffer = null;
-        let originalFileNameFromUpload = null; // To store if decryption is from uploaded file
+        let originalFileNameFromUpload = null;
 
         // Determine if decryption is from selected file in list or uploaded file
         if (selectedFileIdForDecryption) {
-            // Decrypting from selected file in list (metadata fetched, actual file content needs to be fetched)
+            // Decrypting from selected file in list
             showStatusMessage('Fetching encrypted file content and metadata... Please wait.', 'info');
             fileIdToDecrypt = selectedFileIdForDecryption;
 
@@ -781,10 +856,10 @@ if (decryptButton) {
             }
 
         } else if (fileInput && fileInput.files[0]) {
-            // Decrypting from uploaded file (content already in browser, need to extract fileId)
+            // Decrypting from uploaded file
             showStatusMessage('Reading uploaded encrypted file and fetching metadata... Please wait.', 'info');
             const selectedEncryptedFile = fileInput.files[0];
-            originalFileNameFromUpload = selectedEncryptedFile.name; // Store original name from uploaded file
+            originalFileNameFromUpload = selectedEncryptedFile.name;
 
             try {
                 const fullEncryptedBuffer = await selectedEncryptedFile.arrayBuffer();
@@ -793,7 +868,7 @@ if (decryptButton) {
                 let fileIdString = '';
                 let delimiterIndex = -1;
                 const textDecoder = new TextDecoder();
-                for (let i = 0; i < fullEncryptedBytes.byteLength && i < 40; i++) { // Max UUID is 36 chars + 1 for delimiter
+                for (let i = 0; i < fullEncryptedBytes.byteLength && i < 40; i++) {
                     const char = textDecoder.decode(fullEncryptedBytes.slice(i, i + 1));
                     if (char === '|') {
                         delimiterIndex = i;
@@ -849,7 +924,7 @@ if (decryptButton) {
             const decryptedContent = await window.crypto.subtle.decrypt(
                 { name: "AES-GCM", iv: unwrappedIv },
                 aesGcmKey,
-                encryptedContentBuffer // Use the buffer (either fetched or from uploaded file)
+                encryptedContentBuffer
             );
 
             const decryptedBlob = new Blob([decryptedContent], { type: 'application/octet-stream' });
@@ -857,12 +932,11 @@ if (decryptButton) {
 
             if (downloadLink) {
                 downloadLink.href = downloadUrl;
-                // Use originalFileName from metadata or from uploaded file if available
                 downloadLink.download = `decrypted_${keyData.originalFileName || originalFileNameFromUpload || 'file'}`;
             }
             if (downloadArea) downloadArea.classList.remove('hidden');
             showStatusMessage('File decrypted successfully! Download ready.', 'success');
-            if (recoveryPhraseInput) recoveryPhraseInput.value = ''; // Clear recovery phrase
+            if (recoveryPhraseInput) recoveryPhraseInput.value = '';
 
             // Clear file input and reset selected file for decryption after successful decryption
             if (fileInput) fileInput.value = '';
@@ -877,126 +951,6 @@ if (decryptButton) {
             if (downloadArea) downloadArea.classList.add('hidden');
         }
     });
-}
-
-// --- File Listing Logic ---
-
-/**
- * Fetches and displays the current user's encrypted files.
- */
-async function loadUserFiles() {
-    if (!currentUser || !currentUser.user_id || !userFilesListDiv) {
-        if (userFilesListDiv) {
-            userFilesListDiv.innerHTML = '<p class="text-gray-500 text-center">Please log in to see your files.</p>';
-        }
-        return;
-    }
-
-    userFilesListDiv.innerHTML = '<p class="text-gray-500 text-center">Loading files...</p>';
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/keys/${currentUser.user_id}`);
-        const files = await response.json();
-
-        userFilesListDiv.innerHTML = ''; // Clear previous list
-
-        if (files.length === 0) {
-            userFilesListDiv.innerHTML = '<p class="text-gray-500 text-center">No files encrypted yet. Encrypt one above!</p>';
-            return;
-        }
-
-        files.forEach(file => {
-            const storageIcon = file.storageLocation === 'google_drive' ? '📁' : '💾';
-            const storageText = file.storageLocation === 'google_drive' ? 'Google Drive' : 'Local';
-            
-            const fileItem = document.createElement('div');
-            fileItem.className = 'flex items-center justify-between bg-white p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200';
-            fileItem.innerHTML = `
-                <div class="flex-1 overflow-hidden">
-                    <p class="font-semibold text-gray-800 truncate">${file.originalFileName}</p>
-                    <p class="text-xs text-gray-500">ID: <span class="font-mono text-blue-600">${file.fileId}</span></p>
-                    <p class="text-xs text-gray-500">
-                        <span class="mr-2">${storageIcon} ${storageText}</span>
-                        | Encrypted: ${new Date(file.createdAt).toLocaleString()}
-                    </p>
-                </div>
-                <div class="flex space-x-2 ml-4">
-                    <button data-file-id="${file.fileId}" data-storage="${file.storageLocation || 'local'}"
-                            class="decrypt-from-list-btn bg-[#06D6A0] text-white text-sm py-1 px-3 rounded-md font-semibold
-                                   hover:bg-[#118AB2] transition-colors duration-200 shadow-sm">
-                        Decrypt
-                    </button>
-                    <button data-file-id="${file.fileId}"
-                            class="delete-file-btn bg-[#FF6B6B] text-white text-sm py-1 px-3 rounded-md font-semibold
-                                   hover:bg-[#FFD166] transition-colors duration-200 shadow-sm">
-                        Delete
-                    </button>
-                </div>
-            `;
-            userFilesListDiv.appendChild(fileItem);
-        });
-
-        // Add event listeners to the new decrypt buttons in the list
-        document.querySelectorAll('.decrypt-from-list-btn').forEach(button => {
-            button.addEventListener('click', (e) => {
-                const fileId = e.target.dataset.fileId;
-                const storageLocation = e.target.dataset.storage;
-                selectedFileIdForDecryption = fileId; // Set the global variable
-                selectedFileStorageLocation = storageLocation;
-                if (decryptButton) {
-                    decryptButton.textContent = `Decrypt '${fileId.substring(0, 8)}...' (${storageLocation === 'google_drive' ? 'Drive' : 'Local'})`;
-                }
-                showStatusMessage(`File selected for decryption: ${fileId.substring(0, 8)}... from ${storageLocation === 'google_drive' ? 'Google Drive' : 'Local storage'}`, 'info');
-                if (fileInput) fileInput.value = ''; // Clear file input if a file from list is selected
-                if (selectedFileNameSpan) selectedFileNameSpan.textContent = 'No file selected.';
-            });
-        });
-
-        // Add event listeners to the new delete buttons
-        document.querySelectorAll('.delete-file-btn').forEach(button => {
-            button.addEventListener('click', (e) => {
-                const fileId = e.target.dataset.fileId;
-                if (confirm('Are you sure you want to delete this file metadata and encrypted content? This action cannot be undone.')) {
-                    deleteFile(fileId);
-                }
-            });
-        });
-
-    } catch (error) {
-        console.error('Error loading user files:', error);
-        if (userFilesListDiv) {
-            userFilesListDiv.innerHTML = `<p class="text-red-600 text-center">Failed to load files: ${error.message}</p>`;
-        }
-    }
-}
-
-/**
- * Handles deleting a file from the backend.
- * @param {string} fileId - The ID of the file to delete.
- */
-async function deleteFile(fileId) {
-    if (!currentUser || !currentUser.user_id) {
-        showStatusMessage('User not logged in. Cannot delete file.', 'error');
-        return;
-    }
-
-    showStatusMessage('Deleting file...', 'info');
-    try {
-        const response = await fetch(`${API_BASE_URL}/keys/${currentUser.user_id}/${fileId}`, {
-            method: 'DELETE',
-        });
-
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || `Server error: ${response.statusText}`);
-        }
-
-        showStatusMessage('File deleted successfully!', 'success');
-        loadUserFiles(); // Reload the list after deletion
-    } catch (error) {
-        console.error('Error deleting file:', error);
-        showStatusMessage(`Failed to delete file: ${error.message}.`, 'error');
-    }
 }
 
 // --- Initial UI State ---
@@ -1014,7 +968,6 @@ function checkInitialAuthState() {
 // Run on page load
 document.addEventListener('DOMContentLoaded', checkInitialAuthState);
 
-// Add event listeners for auth tabs (since they are now part of regular script)
-authTabs.forEach(tab => {
-    tab.addEventListener('click', (e) => switchAuthTab(e.target.dataset.tab));
-});
+// Global functions for onclick handlers
+window.selectFileForDecryption = selectFileForDecryption;
+window.deleteFile = deleteFile;
