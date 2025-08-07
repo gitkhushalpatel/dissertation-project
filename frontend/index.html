@@ -37,6 +37,13 @@
         .file-list-container::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
+        /* Modal styles */
+        .modal-overlay {
+            transition: opacity 0.3s ease;
+        }
+        .modal-container {
+            transition: transform 0.3s ease;
+        }
     </style>
 </head>
 <body class="text-gray-800 min-h-screen p-4">
@@ -44,7 +51,7 @@
         <div class="flex justify-between items-center">
             <div class="flex items-center space-x-2">
                 <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                    <span class="text-white font-bold">🔒</span>
+                    <span class="text-white font-bold">SV</span>
                 </div>
                 <h1 class="text-xl font-bold text-gray-800">SecureVault</h1>
             </div>
@@ -61,7 +68,7 @@
         <div class="auth-container rounded-2xl shadow-xl p-8 w-full max-w-md">
             <div class="text-center mb-8">
                 <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span class="text-white text-2xl">🔐</span>
+                    <span class="text-white text-2xl">SV</span>
                 </div>
                 <h1 class="text-3xl font-bold text-gray-800 mb-2">SecureVault</h1>
                 <p class="text-gray-600">Secure file encryption platform</p>
@@ -140,7 +147,7 @@
                         <p class="text-sm text-gray-600 mb-3">Connect your Google Drive to store encrypted files in the cloud.</p>
                         <button id="connectDriveBtn" 
                                 class="bg-blue-500 text-white py-2 px-4 rounded-md font-semibold hover:bg-blue-600 transition-colors">
-                            <span class="mr-2">📁</span>Connect Google Drive
+                            <span class="mr-2">🔗</span>Connect Google Drive
                         </button>
                     </div>
                     
@@ -233,6 +240,28 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal for notifications -->
+    <div id="notificationModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div class="modal-overlay fixed inset-0 bg-black opacity-50"></div>
+        <div class="modal-container bg-white w-full max-w-md mx-auto rounded-lg shadow-lg z-50 transform scale-95">
+            <div class="p-6">
+                <div class="flex justify-between items-start">
+                    <h3 id="modalTitle" class="text-xl font-semibold text-gray-900">Notification</h3>
+                    <button id="modalCloseBtn" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <div class="mt-4">
+                    <p id="modalMessage" class="text-sm text-gray-600">Your message here.</p>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button id="modalOkBtn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 
     <script src="./script.js"></script>
 </body>

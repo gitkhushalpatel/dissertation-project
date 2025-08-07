@@ -11,6 +11,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import logging
 import base64
 from io import BytesIO
+import time
+from threading import Lock
 
 # Google Drive imports
 from google.auth.transport.requests import Request
@@ -35,10 +37,14 @@ DATABASE = os.path.join(os.path.dirname(__file__), 'dissertation.db')
 # Google Drive configuration
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
-GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:5000/api/auth/google/callback')
+GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', 'http://127.0.0.1:5000/api/auth/google/callback')
 
 # Scopes required for Google Drive
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
+
+# Add global variable to store temporary auth data
+temp_auth_storage = {}
+temp_auth_lock = Lock()
 
 def get_db():
     """Get database connection."""
@@ -78,7 +84,7 @@ def init_db():
                 salt TEXT NOT NULL,
                 key_wrapping_iv TEXT NOT NULL,
                 original_file_name TEXT NOT NULL,
-                encrypted_data BLOB NOT NULL,
+                encrypted_data BLOB,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, file_id),
                 FOREIGN KEY (user_id) REFERENCES users (user_id)
@@ -115,59 +121,6 @@ def init_db():
                 
         except sqlite3.OperationalError as e:
             logger.warning(f"Could not add columns to wrapped_keys table: {e}")
-        
-        # Also need to make encrypted_data nullable for Google Drive files
-        try:
-            # Check if we need to recreate the table to make encrypted_data nullable
-            cursor = db.execute("PRAGMA table_info(wrapped_keys)")
-            table_info = cursor.fetchall()
-            encrypted_data_info = next((col for col in table_info if col[1] == 'encrypted_data'), None)
-            
-            if encrypted_data_info and encrypted_data_info[3] == 1:  # NOT NULL constraint exists
-                logger.info("Recreating wrapped_keys table to make encrypted_data nullable...")
-                
-                # Create backup table
-                db.execute('''
-                    CREATE TABLE wrapped_keys_backup AS 
-                    SELECT * FROM wrapped_keys
-                ''')
-                
-                # Drop original table
-                db.execute('DROP TABLE wrapped_keys')
-                
-                # Recreate table with correct schema
-                db.execute('''
-                    CREATE TABLE wrapped_keys (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id TEXT NOT NULL,
-                        file_id TEXT NOT NULL,
-                        wrapped_key TEXT NOT NULL,
-                        iv TEXT NOT NULL,
-                        salt TEXT NOT NULL,
-                        key_wrapping_iv TEXT NOT NULL,
-                        original_file_name TEXT NOT NULL,
-                        encrypted_data BLOB,
-                        google_drive_file_id TEXT,
-                        storage_location TEXT DEFAULT 'local',
-                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE(user_id, file_id),
-                        FOREIGN KEY (user_id) REFERENCES users (user_id)
-                    )
-                ''')
-                
-                # Restore data
-                db.execute('''
-                    INSERT INTO wrapped_keys 
-                    SELECT * FROM wrapped_keys_backup
-                ''')
-                
-                # Drop backup table
-                db.execute('DROP TABLE wrapped_keys_backup')
-                
-                logger.info("Successfully recreated wrapped_keys table")
-                
-        except sqlite3.OperationalError as e:
-            logger.warning(f"Could not modify encrypted_data column: {e}")
         
         # Create indexes
         try:
@@ -370,50 +323,19 @@ def save_wrapped_key():
     API endpoint to save a wrapped key and the encrypted file data.
     Expects a multipart/form-data request.
     """
-    logger.info(f"Received POST to /api/keys")
-    logger.info(f"Request Content-Type: {request.headers.get('Content-Type')}")
-
-    # Log all form data received
-    logger.info(f"Form data received: {request.form}")
-    for key, value in request.form.items():
-        logger.info(f"  Form field - {key}: {value}")
-
-    # Log all files received
-    logger.info(f"Files received: {request.files}")
-    if not request.files:
-        logger.warning("No files were found in the request.files object.")
-        return jsonify({'error': 'No files were found in the request'}), 400
-
     if 'encryptedFile' not in request.files:
-        logger.error("The 'encryptedFile' part is specifically missing from request.files.")
-        return jsonify({'error': 'Missing encrypted file part. Backend could not find "encryptedFile" in request.files.'}), 400
+        return jsonify({'error': 'Missing encrypted file part.'}), 400
     
     encrypted_file = request.files['encryptedFile']
-    
-    if encrypted_file.filename == '':
-        logger.error("Encrypted file was submitted but its filename is empty.")
-        return jsonify({'error': 'No selected file for encryption'}), 400
-
     encrypted_data = encrypted_file.read()
 
-    if not encrypted_data:
-        logger.error("Encrypted file content is empty after reading.")
-        return jsonify({'error': 'Encrypted file is empty after read'}), 400
-
-    # Original metadata extraction (keep this)
     data = request.form
     required_fields = ['wrappedKey', 'iv', 'salt', 'keyWrappingIv', 'originalFileName', 'fileId', 'userId']
     if not all(field in data for field in required_fields):
-        missing_fields = [field for field in required_fields if field not in data]
-        logger.error(f"Missing required metadata fields: {missing_fields}")
-        return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
+        missing = [f for f in required_fields if f not in data]
+        return jsonify({'error': f'Missing required fields: {", ".join(missing)}'}), 400
 
     db = get_db()
-    
-    user = db.execute('SELECT id FROM users WHERE user_id = ?', (data['userId'],)).fetchone()
-    if not user:
-        logger.error(f"Invalid user ID received: {data['userId']}")
-        return jsonify({'error': 'Invalid user'}), 401
     
     try:
         db.execute('''
@@ -421,34 +343,20 @@ def save_wrapped_key():
             (user_id, file_id, wrapped_key, iv, salt, key_wrapping_iv, original_file_name, encrypted_data, storage_location) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            data['userId'],
-            data['fileId'],
-            data['wrappedKey'],
-            data['iv'],
-            data['salt'],
-            data['keyWrappingIv'],
-            data['originalFileName'],
-            encrypted_data,
-            'local'
+            data['userId'], data['fileId'], data['wrappedKey'], data['iv'],
+            data['salt'], data['keyWrappingIv'], data['originalFileName'],
+            encrypted_data, 'local'
         ))
         db.commit()
-        
-        key_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
-        logger.info(f"Key and file saved for user {data['userId']}: {data['originalFileName']}")
-        return jsonify({'message': 'Key and file saved successfully', 'id': key_id}), 201
+        return jsonify({'message': 'Key and file saved successfully'}), 201
     except sqlite3.IntegrityError:
-        logger.error(f"IntegrityError: Key with file ID {data['fileId']} already exists for user {data['userId']}")
-        return jsonify({'error': 'Key with this file ID already exists for this user'}), 409
+        return jsonify({'error': 'Key with this file ID already exists'}), 409
     except Exception as e:
         logger.error(f"Error saving key and file: {e}", exc_info=True)
         return jsonify({'error': 'Failed to save key and file'}), 500
 
 @app.route('/api/keys/<string:user_id>/<string:file_id>', methods=['GET'])
 def get_wrapped_key(user_id, file_id):
-    """
-    API endpoint to retrieve a wrapped key and OTHER metadata by user ID and file ID.
-    This endpoint NO LONGER returns the encrypted_data.
-    """
     db = get_db()
     key_data = db.execute('''
         SELECT id, user_id, file_id, wrapped_key, iv, salt, key_wrapping_iv, original_file_name, 
@@ -458,27 +366,11 @@ def get_wrapped_key(user_id, file_id):
     ''', (user_id, file_id)).fetchone()
     
     if key_data:
-        key_dict = {
-            'id': key_data['id'],
-            'userId': key_data['user_id'],
-            'fileId': key_data['file_id'],
-            'wrappedKey': key_data['wrapped_key'],
-            'iv': key_data['iv'],
-            'salt': key_data['salt'],
-            'keyWrappingIv': key_data['key_wrapping_iv'],
-            'originalFileName': key_data['original_file_name'],
-            'storageLocation': key_data['storage_location'],
-            'googleDriveFileId': key_data['google_drive_file_id'],
-            'createdAt': key_data['created_at'],
-        }
-        return jsonify(key_dict), 200
-    return jsonify({'error': 'Key metadata not found for this file ID and user.'}), 404
+        return jsonify(dict(key_data)), 200
+    return jsonify({'error': 'Key metadata not found'}), 404
 
 @app.route('/api/files/<string:user_id>/<string:file_id>', methods=['GET'])
 def get_encrypted_file_content(user_id, file_id):
-    """
-    API endpoint to retrieve the raw encrypted file content (BLOB) by user ID and file ID.
-    """
     db = get_db()
     file_data = db.execute('''
         SELECT encrypted_data, original_file_name
@@ -486,138 +378,237 @@ def get_encrypted_file_content(user_id, file_id):
         WHERE user_id = ? AND file_id = ? AND storage_location = 'local'
     ''', (user_id, file_id)).fetchone()
 
-    if file_data:
+    if file_data and file_data['encrypted_data']:
         return send_file(
             BytesIO(file_data['encrypted_data']),
             mimetype='application/octet-stream',
             as_attachment=True,
             download_name=f"encrypted_{file_data['original_file_name']}.enc"
         )
-    return jsonify({'error': 'Encrypted file content not found or not authorized.'}), 404
+    return jsonify({'error': 'Encrypted file content not found'}), 404
 
 @app.route('/api/keys/<string:user_id>', methods=['GET'])
 def list_user_keys(user_id):
-    """API endpoint to list all files (keys) for a given user ID."""
     db = get_db()
-    user_keys = db.execute('''
-        SELECT file_id, original_file_name, storage_location, created_at
-        FROM wrapped_keys 
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-    ''', (user_id,)).fetchall()
-    
-    keys_list = [
-        {
-            'fileId': row['file_id'],
-            'originalFileName': row['original_file_name'],
-            'storageLocation': row['storage_location'],
-            'createdAt': row['created_at']
-        }
-        for row in user_keys
-    ]
-    
-    return jsonify(keys_list), 200
+    keys = db.execute('SELECT file_id, original_file_name, storage_location, created_at FROM wrapped_keys WHERE user_id = ? ORDER BY created_at DESC', (user_id,)).fetchall()
+    return jsonify([dict(row) for row in keys]), 200
 
 @app.route('/api/keys/<string:user_id>/<string:file_id>', methods=['DELETE'])
 def delete_wrapped_key(user_id, file_id):
-    """API endpoint to delete a wrapped key and its associated file data."""
     db = get_db()
-    cursor = db.execute('''
-        DELETE FROM wrapped_keys 
-        WHERE user_id = ? AND file_id = ?
-    ''', (user_id, file_id))
+    cursor = db.execute('DELETE FROM wrapped_keys WHERE user_id = ? AND file_id = ?', (user_id, file_id))
     db.commit()
-    
     if cursor.rowcount > 0:
-        logger.info(f"Key and file deleted for user {user_id}, file {file_id}")
         return jsonify({'message': 'Key and file deleted successfully'}), 200
-    return jsonify({'error': 'Key not found or not authorized'}), 404
+    return jsonify({'error': 'Key not found'}), 404
 
-# Google Drive API endpoints
+# --- Google Drive API Endpoints ---
+
 @app.route('/api/auth/google', methods=['GET'])
 def google_auth():
     """Initiate Google OAuth flow."""
-    try:
-        if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-            return jsonify({'error': 'Google Drive integration not configured'}), 500
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        return jsonify({'error': 'Google Drive integration not configured on server'}), 500
+    
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'User ID required'}), 400
             
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": GOOGLE_CLIENT_ID,
-                    "client_secret": GOOGLE_CLIENT_SECRET,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [GOOGLE_REDIRECT_URI]
-                }
-            },
-            scopes=SCOPES
-        )
-        flow.redirect_uri = GOOGLE_REDIRECT_URI
-        
-        auth_url, _ = flow.authorization_url(prompt='consent')
-        return jsonify({'auth_url': auth_url}), 200
-    except Exception as e:
-        logger.error(f"Error initiating Google auth: {e}")
-        return jsonify({'error': 'Failed to initiate Google authentication'}), 500
+    flow = Flow.from_client_config(
+        client_config={
+            "web": {
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [GOOGLE_REDIRECT_URI],
+            }
+        },
+        scopes=SCOPES
+    )
+    flow.redirect_uri = GOOGLE_REDIRECT_URI
+    
+    # Include user_id in the state parameter
+    auth_url, state = flow.authorization_url(
+        prompt='consent', 
+        access_type='offline',
+        state=f"user_id:{user_id}"
+    )
+    return jsonify({'auth_url': auth_url}), 200
 
 @app.route('/api/auth/google/callback', methods=['GET'])
 def google_callback():
-    """Handle Google OAuth callback."""
+    """Handle Google OAuth callback and store credentials temporarily."""
     try:
+        state = request.args.get('state')
         code = request.args.get('code')
+        error = request.args.get('error')
+
+        if error:
+            logger.error(f"Google auth error from user denial: {error}")
+            return f"""
+            <html>
+            <head><title>Authentication Error</title></head>
+            <body>
+                <h1>Authentication Error</h1>
+                <p>Error: {error}</p>
+                <p>You can close this window.</p>
+                <script>
+                    setTimeout(function() {{
+                        window.close();
+                    }}, 3000);
+                </script>
+            </body>
+            </html>
+            """, 400
+
         if not code:
-            return jsonify({'error': 'Authorization code not provided'}), 400
-        
+            logger.error("Google callback missing authorization code.")
+            return """
+            <html>
+            <head><title>Error</title></head>
+            <body>
+                <h1>Error</h1>
+                <p>Authorization code not provided.</p>
+                <p>You can close this window.</p>
+            </body>
+            </html>
+            """, 400
+
+        # Extract user_id from state
+        user_id = None
+        if state and state.startswith('user_id:'):
+            user_id = state.split('user_id:')[1]
+
         flow = Flow.from_client_config(
-            {
+            client_config={
                 "web": {
                     "client_id": GOOGLE_CLIENT_ID,
                     "client_secret": GOOGLE_CLIENT_SECRET,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [GOOGLE_REDIRECT_URI]
+                    "redirect_uris": [GOOGLE_REDIRECT_URI],
                 }
             },
-            scopes=SCOPES
+            scopes=SCOPES,
+            state=state
         )
         flow.redirect_uri = GOOGLE_REDIRECT_URI
+        
+        logger.info("Exchanging authorization code for access token...")
         flow.fetch_token(code=code)
+        logger.info("Token exchange successful.")
         
         credentials = flow.credentials
-        return f"""
+        
+        creds_json_string = json.dumps({
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes
+        })
+
+        # Store credentials directly in database if we have user_id
+        if user_id:
+            try:
+                db = get_db()
+                db.execute(
+                    'UPDATE users SET google_drive_token = ? WHERE user_id = ?',
+                    (creds_json_string, user_id)
+                )
+                db.commit()
+                logger.info(f"Google Drive credentials stored for user: {user_id}")
+            except Exception as e:
+                logger.error(f"Error storing credentials in database: {e}")
+                # Fall back to temporary storage
+                with temp_auth_lock:
+                    temp_auth_storage[user_id] = {
+                        'credentials': creds_json_string,
+                        'timestamp': time.time()
+                    }
+        else:
+            logger.warning("No user_id found in state, cannot store credentials")
+        
+        return """
         <html>
+        <head><title>Authentication Successful</title></head>
         <body>
-        <h1>Authentication Successful!</h1>
-        <p>You can close this window now.</p>
-        <script>
-            window.opener.postMessage({{
-                credentials: {credentials.to_json()}
-            }}, window.location.origin);
-            window.close();
-        </script>
+            <h1>Authentication Successful!</h1>
+            <p>Google Drive has been connected successfully.</p>
+            <p>This window will close automatically...</p>
+            <script>
+                // Try to close the window
+                setTimeout(function() {
+                    window.close();
+                }, 2000);
+            </script>
         </body>
         </html>
-        """
+        """, 200
+
     except Exception as e:
-        logger.error(f"Error in Google callback: {e}")
-        return f"<html><body><h1>Error: {str(e)}</h1></body></html>", 500
+        logger.error(f"CRITICAL: An exception occurred in the Google callback.", exc_info=True)
+        return f"""
+        <html>
+        <head><title>Authentication Error</title></head>
+        <body>
+            <h1>Authentication Error</h1>
+            <p>An internal server error occurred during authentication.</p>
+            <p>You can close this window.</p>
+            <script>
+                setTimeout(function() {{
+                    window.close();
+                }}, 3000);
+            </script>
+        </body>
+        </html>
+        """, 500
+
+@app.route('/api/auth/google/check/<string:user_id>', methods=['GET'])
+def check_temp_credentials(user_id):
+    """Check if there are temporary credentials waiting for this user."""
+    with temp_auth_lock:
+        if user_id in temp_auth_storage:
+            auth_data = temp_auth_storage[user_id]
+            # Check if the credentials are recent (within 5 minutes)
+            if time.time() - auth_data['timestamp'] < 300:  # 5 minutes
+                # Move to permanent storage
+                try:
+                    db = get_db()
+                    db.execute(
+                        'UPDATE users SET google_drive_token = ? WHERE user_id = ?',
+                        (auth_data['credentials'], user_id)
+                    )
+                    db.commit()
+                    # Remove from temporary storage
+                    del temp_auth_storage[user_id]
+                    return jsonify({'success': True, 'message': 'Credentials stored'}), 200
+                except Exception as e:
+                    logger.error(f"Error storing temp credentials: {e}")
+                    return jsonify({'success': False, 'error': str(e)}), 500
+            else:
+                # Expired, remove it
+                del temp_auth_storage[user_id]
+    
+    return jsonify({'success': False, 'message': 'No pending credentials'}), 404
 
 @app.route('/api/auth/google/store', methods=['POST'])
 def store_google_credentials():
     """Store Google Drive credentials for user."""
     data = request.json
     user_id = data.get('user_id')
-    credentials_json = data.get('credentials')
+    credentials_json_string = data.get('credentials')
     
-    if not user_id or not credentials_json:
+    if not user_id or not credentials_json_string:
         return jsonify({'error': 'Missing user_id or credentials'}), 400
     
     try:
         db = get_db()
         db.execute(
             'UPDATE users SET google_drive_token = ? WHERE user_id = ?',
-            (credentials_json, user_id)
+            (credentials_json_string, user_id)
         )
         db.commit()
         return jsonify({'message': 'Google Drive credentials stored successfully'}), 200
@@ -627,25 +618,21 @@ def store_google_credentials():
 
 @app.route('/api/drive/upload', methods=['POST'])
 def upload_to_google_drive():
-    """Upload encrypted file to Google Drive."""
     try:
         data = request.form
         user_id = data.get('userId')
         
-        if not user_id:
-            return jsonify({'error': 'User ID required'}), 400
+        if not user_id: return jsonify({'error': 'User ID required'}), 400
         
         service = get_drive_service(user_id)
-        if not service:
-            return jsonify({'error': 'Google Drive not connected'}), 401
+        if not service: return jsonify({'error': 'Google Drive not connected'}), 401
         
-        if 'encryptedFile' not in request.files:
-            return jsonify({'error': 'No encrypted file provided'}), 400
+        if 'encryptedFile' not in request.files: return jsonify({'error': 'No encrypted file provided'}), 400
         
         encrypted_file = request.files['encryptedFile']
         encrypted_data = encrypted_file.read()
         
-        drive_filename = f"SecureVault_{data.get('originalFileName', 'encrypted_file')}.enc"
+        drive_filename = f"SecureVault_{data.get('originalFileName', 'file')}.enc"
         drive_file_id = upload_to_drive(service, encrypted_data, drive_filename)
         
         db = get_db()
@@ -655,22 +642,13 @@ def upload_to_google_drive():
              google_drive_file_id, storage_location) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            user_id,
-            data.get('fileId'),
-            data.get('wrappedKey'),
-            data.get('iv'),
-            data.get('salt'),
-            data.get('keyWrappingIv'),
-            data.get('originalFileName'),
-            drive_file_id,
-            'google_drive'
+            user_id, data.get('fileId'), data.get('wrappedKey'), data.get('iv'),
+            data.get('salt'), data.get('keyWrappingIv'), data.get('originalFileName'),
+            drive_file_id, 'google_drive'
         ))
         db.commit()
         
-        return jsonify({
-            'message': 'File uploaded to Google Drive successfully',
-            'drive_file_id': drive_file_id
-        }), 201
+        return jsonify({'message': 'File uploaded to Google Drive successfully', 'drive_file_id': drive_file_id}), 201
         
     except Exception as e:
         logger.error(f"Error uploading to Google Drive: {e}")
@@ -678,21 +656,18 @@ def upload_to_google_drive():
 
 @app.route('/api/drive/download/<string:user_id>/<string:file_id>', methods=['GET'])
 def download_from_google_drive(user_id, file_id):
-    """Download encrypted file from Google Drive."""
     try:
         db = get_db()
         file_data = db.execute('''
-            SELECT google_drive_file_id, original_file_name, storage_location
+            SELECT google_drive_file_id, original_file_name
             FROM wrapped_keys
             WHERE user_id = ? AND file_id = ? AND storage_location = 'google_drive'
         ''', (user_id, file_id)).fetchone()
         
-        if not file_data:
-            return jsonify({'error': 'File not found or not stored on Google Drive'}), 404
+        if not file_data: return jsonify({'error': 'File not found on Google Drive'}), 404
         
         service = get_drive_service(user_id)
-        if not service:
-            return jsonify({'error': 'Google Drive not connected'}), 401
+        if not service: return jsonify({'error': 'Google Drive not connected'}), 401
         
         encrypted_content = download_from_drive(service, file_data['google_drive_file_id'])
         
@@ -709,50 +684,22 @@ def download_from_google_drive(user_id, file_id):
 
 @app.route('/api/drive/status/<string:user_id>', methods=['GET'])
 def google_drive_status(user_id):
-    """Check if user has Google Drive connected."""
-    try:
-        db = get_db()
-        user = db.execute(
-            'SELECT google_drive_token FROM users WHERE user_id = ?', 
-            (user_id,)
-        ).fetchone()
-        
-        is_connected = bool(user and user['google_drive_token'])
-        return jsonify({'connected': is_connected}), 200
-    except Exception as e:
-        logger.error(f"Error checking Drive status: {e}")
-        return jsonify({'error': 'Failed to check Google Drive status'}), 500
+    db = get_db()
+    user = db.execute('SELECT google_drive_token FROM users WHERE user_id = ?', (user_id,)).fetchone()
+    return jsonify({'connected': bool(user and user['google_drive_token'])}), 200
 
 @app.route('/api/drive/disconnect/<string:user_id>', methods=['POST'])
 def disconnect_google_drive(user_id):
-    """Disconnect Google Drive for user."""
-    try:
-        db = get_db()
-        db.execute(
-            'UPDATE users SET google_drive_token = NULL WHERE user_id = ?',
-            (user_id,)
-        )
-        db.commit()
-        return jsonify({'message': 'Google Drive disconnected successfully'}), 200
-    except Exception as e:
-        logger.error(f"Error disconnecting Drive: {e}")
-        return jsonify({'error': 'Failed to disconnect Google Drive'}), 500
+    db = get_db()
+    db.execute('UPDATE users SET google_drive_token = NULL WHERE user_id = ?', (user_id,))
+    db.commit()
+    return jsonify({'message': 'Google Drive disconnected successfully'}), 200
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check endpoint."""
-    return jsonify({'status': 'healthy', 'message': 'SecureVault API is running'}), 200
-
-@app.errorhandler(404)
-def not_found(error):
-    """Handle 404 errors."""
-    return jsonify({'error': 'Endpoint not found'}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    """Handle 500 errors."""
-    logger.error(f"Internal server error: {error}")
-    return jsonify({'error': 'Internal server error'}), 500
+    return jsonify({'status': 'healthy'}), 200
 
 if __name__ == '__main__':
+    # Make sure to set GOOGLE_REDIRECT_URI in your .env file
+    # Example: GOOGLE_REDIRECT_URI=http://127.0.0.1:5000/api/auth/google/callback
     app.run(debug=True, port=5000)
