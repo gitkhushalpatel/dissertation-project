@@ -279,14 +279,22 @@ async function connectGoogleDrive() {
         const response = await fetch(`${API_BASE_URL}/auth/google?user_id=${currentUser.user_id}`);
         const data = await response.json();
         
-        if (!response.ok) throw new Error(data.error);
+        if (!response.ok) {
+            let errorMessage = data.error || 'Failed to initiate Google Drive connection';
+            if (errorMessage.includes('not configured')) {
+                showModal('Configuration Error 🔧', 'Google Drive integration is not properly configured on the server. Please contact your administrator.');
+            } else {
+                showModal('Connection Error', `Failed to start Google Drive connection: ${errorMessage}`, true);
+            }
+            throw new Error(errorMessage);
+        }
         
         console.log('Opening auth URL:', data.auth_url);
         
         googleAuthWindow = window.open(data.auth_url, 'google_auth', 'width=500,height=600');
 
         if (!googleAuthWindow || googleAuthWindow.closed) {
-            showModal('Popup Blocked', 'Please allow popups for this site.', true);
+            showModal('Popup Blocked 🚫', 'Your browser blocked the Google authentication popup. Please allow popups for this site and try again.', true);
             return;
         }
 
@@ -310,7 +318,7 @@ async function connectGoogleDrive() {
                     clearInterval(pollForCompletion);
                     isGoogleDriveConnected = true;
                     updateDriveUI();
-                    showModal('Success!', 'Google Drive connected successfully.');
+                    showModal('Google Drive Connected! 🎉', 'Your Google Drive has been successfully connected. You can now encrypt files directly to Google Drive!');
                     showStatusMessage('Google Drive connected successfully!', 'success');
                     
                     // Try to close the auth window
@@ -332,7 +340,7 @@ async function connectGoogleDrive() {
                     clearInterval(pollForCompletion);
                     isGoogleDriveConnected = true;
                     updateDriveUI();
-                    showModal('Success!', 'Google Drive connected successfully.');
+                    showModal('Google Drive Connected! 🎉', 'Your Google Drive has been successfully connected. You can now encrypt files directly to Google Drive!');
                     showStatusMessage('Google Drive connected successfully!', 'success');
                     
                     // Try to close the auth window
@@ -366,10 +374,10 @@ async function connectGoogleDrive() {
                                     console.log('Found delayed temp credentials!');
                                     isGoogleDriveConnected = true;
                                     updateDriveUI();
-                                    showModal('Success!', 'Google Drive connected successfully.');
+                                    showModal('Google Drive Connected! 🎉', 'Your Google Drive has been successfully connected. You can now encrypt files directly to Google Drive!');
                                     showStatusMessage('Google Drive connected successfully!', 'success');
                                 } else {
-                                    showStatusMessage('No authentication detected. Please try again.', 'error');
+                                    showModal('Authentication Cancelled 🤔', 'Google Drive authentication was cancelled or incomplete. You can try connecting again, or use local file encryption instead.');
                                 }
                             } catch (e) {
                                 console.error('Final check error:', e);
@@ -390,7 +398,7 @@ async function connectGoogleDrive() {
                 clearInterval(pollForCompletion);
                 
                 if (!isGoogleDriveConnected) {
-                    showModal('Connection Timed Out', 'The Google Drive connection timed out.', true);
+                    showModal('Connection Timeout ⏰', 'The Google Drive connection took too long and timed out. Please try again. If the problem persists, check your internet connection.');
                 }
                 
                 try {
@@ -403,7 +411,7 @@ async function connectGoogleDrive() {
 
     } catch (error) {
         console.error('Error initiating Google Drive connection:', error);
-        showModal('Connection Error', error.message, true);
+        showStatusMessage('Failed to connect to Google Drive. Please try again.', 'error');
     }
 }
 
@@ -877,14 +885,62 @@ async function handleEncryptToDrive() {
         
         if (response.ok) {
             showStatusMessage('File encrypted and uploaded to Google Drive successfully!', 'success');
+            showModal('Upload Successful! 🎉', `Your file "${file.name}" has been encrypted and safely uploaded to Google Drive.`);
             loadUserFiles();
         } else {
-            throw new Error(result.error || 'Upload to Google Drive failed');
+            // Handle specific Google Drive errors with user-friendly messages
+            let errorMessage = result.error || 'Upload to Google Drive failed';
+            let modalTitle = 'Upload Error';
+            let modalMessage = '';
+            
+            if (errorMessage.includes('storage quota') || errorMessage.includes('storageQuotaExceeded')) {
+                modalTitle = 'Google Drive Storage Full 📦';
+                modalMessage = `Your Google Drive storage is full! 
+                
+Here's what you can do:
+• Delete some files from your Google Drive
+• Empty your Google Drive trash
+• Upgrade your Google storage plan
+• Use "Encrypt File (Local)" instead
+
+Your file encryption is working perfectly - this is just a storage limit issue.`;
+            } else if (errorMessage.includes('authentication') || errorMessage.includes('unauthorized')) {
+                modalTitle = 'Google Drive Access Issue 🔑';
+                modalMessage = `There's an issue with your Google Drive connection.
+
+Please try:
+• Disconnecting and reconnecting Google Drive
+• Make sure you granted all permissions
+• Check if your Google account is still valid`;
+            } else if (errorMessage.includes('network') || errorMessage.includes('timeout')) {
+                modalTitle = 'Connection Problem 🌐';
+                modalMessage = `There was a network issue uploading to Google Drive.
+
+Please try:
+• Check your internet connection
+• Try again in a few moments
+• Use "Encrypt File (Local)" as an alternative`;
+            } else {
+                modalTitle = 'Upload Failed ❌';
+                modalMessage = `We couldn't upload your file to Google Drive.
+
+Error: ${errorMessage}
+
+You can still use "Encrypt File (Local)" to save your encrypted file locally.`;
+            }
+            
+            showModal(modalTitle, modalMessage, true);
+            throw new Error(errorMessage);
         }
         
     } catch (error) {
         console.error('Google Drive upload error:', error);
-        showStatusMessage(`Upload failed: ${error.message}`, 'error');
+        // Only show generic error if we haven't already shown a specific modal
+        if (!error.message.includes('storage quota') && 
+            !error.message.includes('authentication') && 
+            !error.message.includes('network')) {
+            showStatusMessage(`Upload failed: ${error.message}`, 'error');
+        }
     } finally {
         encryptToDriveButton.disabled = false;
     }
