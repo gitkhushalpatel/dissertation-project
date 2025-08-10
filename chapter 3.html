@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infographic: A Zero-Knowledge Architecture for Secure Cloud Storage</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 320px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 380px;
+            }
+        }
+        .flow-step {
+            position: relative;
+            padding-left: 2.5rem;
+            padding-bottom: 2rem;
+        }
+        .flow-step:not(:last-child)::before {
+            content: '';
+            position: absolute;
+            left: 1rem;
+            top: 1.5rem;
+            width: 2px;
+            height: 100%;
+            background-color: #7a5195;
+        }
+        .flow-dot {
+            position: absolute;
+            left: 0.5rem;
+            top: 0.5rem;
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+    </style>
+</head>
+<body class="bg-[#003f5c] text-white">
+
+    <div class="container mx-auto px-4 py-12">
+
+        <header class="text-center mb-16">
+            <h1 class="text-4xl md:text-6xl font-black uppercase tracking-wider text-[#ffa600]">The Zero-Knowledge Promise</h1>
+            <p class="text-lg md:text-xl mt-4 max-w-3xl mx-auto text-gray-300">Visualizing a Secure Architecture for True Cloud Data Privacy</p>
+        </header>
+
+        <main class="space-y-16">
+
+            <section id="problem">
+                <h2 class="text-3xl font-bold text-center mb-8">The Cloud's Trust Deficit</h2>
+                <p class="text-center max-w-2xl mx-auto mb-12 text-gray-300">Conventional cloud storage requires you to trust the provider with your encryption keys. Client-Side Encryption (CSE) fundamentally changes this by ensuring only you ever hold the keys to your data.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+                    <div class="glass-card rounded-xl p-6 shadow-2xl border-red-500/50 border-2">
+                        <h3 class="text-2xl font-bold mb-4 text-red-400">Server-Side Encryption (The Standard Model)</h3>
+                        <div class="flex items-center space-x-4">
+                            <div class="text-5xl">👤</div>
+                            <div class="text-2xl font-mono text-red-400">&rarr;</div>
+                            <div class="text-center">
+                                <p class="text-sm">Plaintext Data</p>
+                                <p class="text-sm">Password</p>
+                            </div>
+                            <div class="text-2xl font-mono text-red-400">&rarr;</div>
+                            <div class="text-center">
+                                <div class="text-5xl">☁️</div>
+                                <p class="font-bold">Cloud Provider</p>
+                                <p class="text-sm text-red-400">(Holds Keys & Data)</p>
+                            </div>
+                        </div>
+                        <p class="mt-4 text-red-300">Your data is vulnerable to provider access, breaches, and surveillance. You are trusting their policies, not technology.</p>
+                    </div>
+                    <div class="glass-card rounded-xl p-6 shadow-2xl border-green-500/50 border-2">
+                        <h3 class="text-2xl font-bold mb-4 text-green-400">Client-Side Encryption (The Zero-Knowledge Model)</h3>
+                        <div class="flex items-center space-x-4">
+                            <div class="text-center">
+                                <div class="text-5xl">👤</div>
+                                <p class="font-bold">You</p>
+                                <p class="text-sm text-green-400">(Hold Master Key)</p>
+                            </div>
+                            <div class="text-2xl font-mono text-green-400">&rarr;</div>
+                            <div class="text-center">
+                                <p class="text-sm">Encrypted Data</p>
+                                <p class="text-sm">(Ciphertext)</p>
+                            </div>
+                            <div class="text-2xl font-mono text-green-400">&rarr;</div>
+                            <div class="text-5xl">☁️</div>
+                        </div>
+                        <p class="mt-4 text-green-300">The provider only stores unintelligible data. Your privacy is guaranteed by cryptography, not policy.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="architecture">
+                <h2 class="text-3xl font-bold text-center mb-8">System Architecture: A Zero-Trust Flow</h2>
+                <p class="text-center max-w-2xl mx-auto mb-12 text-gray-300">The system is designed with a strict separation of duties. All cryptographic operations happen on your device, rendering the server and cloud storage 'blind' to your actual data.</p>
+                <div class="glass-card rounded-xl p-8 max-w-4xl mx-auto">
+                    <div class="flex flex-col md:flex-row justify-around items-center space-y-8 md:space-y-0 md:space-x-8">
+                        <div class="text-center">
+                            <div class="text-6xl mb-2">💻</div>
+                            <h3 class="text-xl font-bold">1. Client (Your Browser)</h3>
+                            <p class="text-sm text-gray-300">Handles all encryption, decryption, and key derivation. The only place plaintext exists.</p>
+                        </div>
+                        <div class="text-4xl font-mono text-[#ffa600] transform rotate-90 md:rotate-0">&rarr;</div>
+                        <div class="text-center">
+                            <div class="text-6xl mb-2">🗄️</div>
+                            <h3 class="text-xl font-bold">2. Backend Server</h3>
+                            <p class="text-sm text-gray-300">A simple proxy. Manages user accounts but never sees passwords, keys, or file content.</p>
+                        </div>
+                        <div class="text-4xl font-mono text-[#ffa600] transform rotate-90 md:rotate-0">&rarr;</div>
+                        <div class="text-center">
+                            <div class="text-6xl mb-2">☁️</div>
+                            <h3 class="text-xl font-bold">3. Cloud Storage</h3>
+                            <p class="text-sm text-gray-300">The untrusted 'vault'. Stores only the final, opaque encrypted data blobs.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="crypto-core">
+                <h2 class="text-3xl font-bold text-center mb-8">The Cryptographic Core</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+                    <div class="glass-card rounded-xl p-8">
+                        <h3 class="text-2xl font-bold mb-6">File Encryption & Key Wrapping</h3>
+                        <div class="relative">
+                            <div class="flow-step">
+                                <div class="flow-dot bg-[#ffa600] rounded-full flex items-center justify-center text-black font-bold">1</div>
+                                <h4 class="font-bold text-lg">Generate File Key</h4>
+                                <p class="text-sm text-gray-300">For each file, a unique, random 256-bit key (FEK) is created in your browser.</p>
+                            </div>
+                            <div class="flow-step">
+                                <div class="flow-dot bg-[#ef5675] rounded-full flex items-center justify-center text-black font-bold">2</div>
+                                <h4 class="font-bold text-lg">Encrypt File</h4>
+                                <p class="text-sm text-gray-300">The file's content is encrypted with its unique FEK using AES-256-GCM.</p>
+                            </div>
+                            <div class="flow-step">
+                                <div class="flow-dot bg-[#bc5090] rounded-full flex items-center justify-center text-black font-bold">3</div>
+                                <h4 class="font-bold text-lg">Wrap the Key</h4>
+                                <p class="text-sm text-gray-300">The FEK itself is then encrypted ("wrapped") using your Master Key (derived from your password).</p>
+                            </div>
+                            <div class="flow-step">
+                                <div class="flow-dot bg-[#7a5195] rounded-full flex items-center justify-center text-black font-bold">4</div>
+                                <h4 class="font-bold text-lg">Upload to Cloud</h4>
+                                <p class="text-sm text-gray-300">The encrypted file and the wrapped FEK are sent to the cloud for storage. The server sees nothing but ciphertext.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="glass-card rounded-xl p-8">
+                        <h3 class="text-2xl font-bold mb-6">Key Derivation Function (KDF) Comparison</h3>
+                        <p class="text-sm text-center mb-4 text-gray-300">A KDF's job is to turn your password into a strong key. This system uses PBKDF2, but Argon2id represents the modern state-of-the-art.</p>
+                        <div class="chart-container">
+                            <canvas id="kdfComparisonChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="verification">
+                <h2 class="text-3xl font-bold text-center mb-8">Security Under the Microscope</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                    <div class="glass-card rounded-xl p-8">
+                        <h3 class="text-2xl font-bold mb-6">PBKDF2 Performance vs. Security</h3>
+                        <p class="text-sm text-center mb-4 text-gray-300">Increasing the iteration count makes it exponentially harder for attackers to crack passwords, with a minimal delay for the legitimate user.</p>
+                        <div class="chart-container">
+                            <canvas id="pbkdf2PerformanceChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="glass-card rounded-xl p-8 text-center">
+                        <h3 class="text-2xl font-bold mb-6">The Usability Challenge</h3>
+                        <p class="text-sm mb-4 text-gray-300">Even the best cryptography is useless if no one uses it. The failure of older tools like PGP highlights this "Adoption Paradox."</p>
+                        <div class="chart-container" style="height: 280px;">
+                            <canvas id="pgpAdoptionChart"></canvas>
+                        </div>
+                        <p class="mt-4 text-lg font-semibold">Over 60% of email users are unaware of E2E encryption tools.</p>
+                        <p class="text-sm text-gray-400">Source: Fবার্টzle & Hielscher (2021)</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="challenges">
+                <h2 class="text-3xl font-bold text-center mb-8">Barriers to Adoption</h2>
+                <p class="text-center max-w-2xl mx-auto mb-12 text-gray-300">For privacy-enhancing tech to succeed, it must overcome significant human-centric challenges beyond just the code.</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+                    <div class="glass-card rounded-xl p-6 text-center shadow-2xl">
+                        <div class="text-5xl mb-4">🤯</div>
+                        <h3 class="text-xl font-bold">Cognitive Burden</h3>
+                        <p class="text-gray-300">Users must manage strong passwords and recovery phrases. The fear of permanent data loss is a major deterrent.</p>
+                    </div>
+                    <div class="glass-card rounded-xl p-6 text-center shadow-2xl">
+                        <div class="text-5xl mb-4">❓</div>
+                        <h3 class="text-xl font-bold">Lack of Awareness</h3>
+                        <p class="text-gray-300">Many users are unaware of the privacy risks of standard cloud services or that better alternatives exist.</p>
+                    </div>
+                    <div class="glass-card rounded-xl p-6 text-center shadow-2xl">
+                        <div class="text-5xl mb-4">🔗</div>
+                        <h3 class="text-xl font-bold">Feature Limitations</h3>
+                        <p class="text-gray-300">Implementing features like secure file sharing or searching encrypted data adds immense complexity.</p>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <footer class="text-center mt-20 pt-8 border-t border-white/10">
+            <p class="text-gray-400">This infographic visualizes the findings from the report: "A Zero-Knowledge Client-Side Encryption Architecture for Secure Cloud Storage."</p>
+        </footer>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const wrapLabel = (label) => {
+                if (label.length <= 16) return label;
+                const words = label.split(' ');
+                let lines = [];
+                let currentLine = '';
+                for (const word of words) {
+                    if ((currentLine + ' ' + word).trim().length > 16) {
+                        lines.push(currentLine.trim());
+                        currentLine = word;
+                    } else {
+                        currentLine = (currentLine + ' ' + word).trim();
+                    }
+                }
+                if (currentLine) lines.push(currentLine.trim());
+                return lines;
+            };
+
+            const tooltipTitleCallback = (tooltipItems) => {
+                const item = tooltipItems[0];
+                let label = item.chart.data.labels[item.dataIndex];
+                if (Array.isArray(label)) {
+                    return label.join(' ');
+                }
+                return label;
+            };
+
+            const brilliantBlues = ['#ffa600', '#ff764a', '#ef5675', '#bc5090', '#7a5195', '#374c80', '#003f5c'];
+
+            new Chart(document.getElementById('kdfComparisonChart'), {
+                type: 'radar',
+                data: {
+                    labels: ['GPU/ASIC Resistance', 'Configurability', 'Standardization', 'Modernity'],
+                    datasets: [{
+                        label: 'PBKDF2',
+                        data: [4, 5, 9, 3],
+                        fill: true,
+                        backgroundColor: 'rgba(255, 118, 74, 0.4)',
+                        borderColor: '#ff764a',
+                        pointBackgroundColor: '#ff764a',
+                    }, {
+                        label: 'Argon2id',
+                        data: [9, 8, 7, 9],
+                        fill: true,
+                        backgroundColor: 'rgba(255, 166, 0, 0.4)',
+                        borderColor: '#ffa600',
+                        pointBackgroundColor: '#ffa600',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#fff' } },
+                        tooltip: { callbacks: { title: tooltipTitleCallback } }
+                    },
+                    scales: {
+                        r: {
+                            angleLines: { color: 'rgba(255, 255, 255, 0.2)' },
+                            grid: { color: 'rgba(255, 255, 255, 0.2)' },
+                            pointLabels: { color: '#fff', font: { size: 12 } },
+                            ticks: {
+                                color: '#003f5c',
+                                backdropColor: 'rgba(255, 255, 255, 0.8)',
+                                stepSize: 2
+                            }
+                        }
+                    }
+                }
+            });
+
+            new Chart(document.getElementById('pbkdf2PerformanceChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['10,000', '100,000 (Prototype)', '600,000 (OWASP Rec.)'],
+                    datasets: [{
+                        label: 'Avg. Derivation Time (ms)',
+                        data: [28, 275, 1650],
+                        backgroundColor: ['#7a5195', '#bc5090', '#ef5675'],
+                        borderColor: '#003f5c',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { title: tooltipTitleCallback } }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#fff' }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#fff', font: { size: 14 } }
+                        }
+                    }
+                }
+            });
+
+            new Chart(document.getElementById('pgpAdoptionChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Unaware of E2E Tools', 'Aware'],
+                    datasets: [{
+                        data: [60, 40],
+                        backgroundColor: ['#bc5090', 'rgba(255, 255, 255, 0.1)'],
+                        borderColor: '#003f5c',
+                        borderWidth: 4,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#fff', font: { size: 14 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: tooltipTitleCallback,
+                                label: function(context) {
+                                    return `${context.label}: ${context.parsed}%`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
