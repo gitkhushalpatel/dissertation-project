@@ -276,6 +276,7 @@ async function connectGoogleDrive() {
     try {
         showStatusMessage('Initiating Google Drive connection...', 'info');
         
+        // Pass user_id as a parameter
         const response = await fetch(`${API_BASE_URL}/auth/google?user_id=${currentUser.user_id}`);
         const data = await response.json();
         
@@ -300,7 +301,7 @@ async function connectGoogleDrive() {
 
         console.log('Auth window opened successfully');
 
-        // Poll for completion
+        // Improved polling with better error handling
         let pollCount = 0;
         const maxPolls = 60; // 2 minutes (2 second intervals)
         
@@ -309,76 +310,93 @@ async function connectGoogleDrive() {
             console.log(`Polling attempt ${pollCount}/${maxPolls}`);
             
             try {
-                // First check if we have temp credentials waiting
+                // Check the new endpoint for temporary credentials
                 const tempResponse = await fetch(`${API_BASE_URL}/auth/google/check/${currentUser.user_id}`);
-                const tempData = await tempResponse.json();
                 
-                if (tempResponse.ok && tempData.success) {
-                    console.log('Temp credentials found and stored!');
-                    clearInterval(pollForCompletion);
-                    isGoogleDriveConnected = true;
-                    updateDriveUI();
-                    showModal('Google Drive Connected! 🎉', 'Your Google Drive has been successfully connected. You can now encrypt files directly to Google Drive!');
-                    showStatusMessage('Google Drive connected successfully!', 'success');
+                if (tempResponse.ok) {
+                    const tempData = await tempResponse.json();
+                    console.log('Temp check response:', tempData);
                     
-                    // Try to close the auth window
-                    try {
-                        if (googleAuthWindow) googleAuthWindow.close();
-                    } catch (e) {
-                        console.log('Could not close auth window:', e);
+                    if (tempData.success) {
+                        console.log('Authentication completed successfully!');
+                        clearInterval(pollForCompletion);
+                        isGoogleDriveConnected = true;
+                        updateDriveUI();
+                        showModal('Google Drive Connected! 🎉', 'Your Google Drive has been successfully connected. You can now encrypt files directly to Google Drive!');
+                        showStatusMessage('Google Drive connected successfully!', 'success');
+                        
+                        // Try to close the auth window
+                        try {
+                            if (googleAuthWindow && !googleAuthWindow.closed) {
+                                googleAuthWindow.close();
+                            }
+                        } catch (e) {
+                            console.log('Could not close auth window:', e);
+                        }
+                        return;
                     }
-                    return;
                 }
                 
-                // Also check status via API as backup method
+                // Fallback: Check status via API
                 const statusResponse = await fetch(`${API_BASE_URL}/drive/status/${currentUser.user_id}`);
-                const statusData = await statusResponse.json();
-                console.log('Status check result:', statusData);
+                if (statusResponse.ok) {
+                    const statusData = await statusResponse.json();
+                    console.log('Status check result:', statusData);
 
-                if (statusData.connected && !isGoogleDriveConnected) {
-                    console.log('Status polling detected connection!');
-                    clearInterval(pollForCompletion);
-                    isGoogleDriveConnected = true;
-                    updateDriveUI();
-                    showModal('Google Drive Connected! 🎉', 'Your Google Drive has been successfully connected. You can now encrypt files directly to Google Drive!');
-                    showStatusMessage('Google Drive connected successfully!', 'success');
-                    
-                    // Try to close the auth window
-                    try {
-                        if (googleAuthWindow) googleAuthWindow.close();
-                    } catch (e) {
-                        console.log('Could not close auth window:', e);
+                    if (statusData.connected && !isGoogleDriveConnected) {
+                        console.log('Status polling detected connection!');
+                        clearInterval(pollForCompletion);
+                        isGoogleDriveConnected = true;
+                        updateDriveUI();
+                        showModal('Google Drive Connected! 🎉', 'Your Google Drive has been successfully connected. You can now encrypt files directly to Google Drive!');
+                        showStatusMessage('Google Drive connected successfully!', 'success');
+                        
+                        // Try to close the auth window
+                        try {
+                            if (googleAuthWindow && !googleAuthWindow.closed) {
+                                googleAuthWindow.close();
+                            }
+                        } catch (e) {
+                            console.log('Could not close auth window:', e);
+                        }
+                        return;
                     }
-                    return;
                 }
+                
             } catch (error) {
                 console.error('Polling error:', error);
+                // Don't fail completely on individual polling errors
             }
             
-            // Check if window is closed (this might not work due to CORS, but try anyway)
+            // Check if window is closed
             try {
-                if (googleAuthWindow.closed) {
-                    console.log('Auth window was closed');
+                if (googleAuthWindow && googleAuthWindow.closed) {
+                    console.log('Auth window was closed by user');
                     clearInterval(pollForCompletion);
                     
                     if (!isGoogleDriveConnected) {
-                        showStatusMessage('Authentication window closed. If you completed authentication, please wait a moment...', 'info');
+                        showStatusMessage('Authentication window closed. Checking for completion...', 'info');
                         
-                        // Give it a few more seconds to check for temp credentials
+                        // Give it a few more seconds to check for credentials
                         setTimeout(async () => {
                             try {
                                 const tempResponse = await fetch(`${API_BASE_URL}/auth/google/check/${currentUser.user_id}`);
-                                const tempData = await tempResponse.json();
-                                
-                                if (tempResponse.ok && tempData.success) {
-                                    console.log('Found delayed temp credentials!');
-                                    isGoogleDriveConnected = true;
-                                    updateDriveUI();
-                                    showModal('Google Drive Connected! 🎉', 'Your Google Drive has been successfully connected. You can now encrypt files directly to Google Drive!');
-                                    showStatusMessage('Google Drive connected successfully!', 'success');
-                                } else {
-                                    showModal('Authentication Cancelled 🤔', 'Google Drive authentication was cancelled or incomplete. You can try connecting again, or use local file encryption instead.');
+                                if (tempResponse.ok) {
+                                    const tempData = await tempResponse.json();
+                                    
+                                    if (tempData.success) {
+                                        console.log('Found delayed credentials!');
+                                        isGoogleDriveConnected = true;
+                                        updateDriveUI();
+                                        showModal('Google Drive Connected! 🎉', 'Your Google Drive has been successfully connected. You can now encrypt files directly to Google Drive!');
+                                        showStatusMessage('Google Drive connected successfully!', 'success');
+                                        return;
+                                    }
                                 }
+                                
+                                // If we get here, auth was likely cancelled
+                                showModal('Authentication Cancelled 🤔', 'Google Drive authentication was cancelled or incomplete. You can try connecting again, or use local file encryption instead.');
+                                showStatusMessage('Google Drive authentication was cancelled.', 'error');
                             } catch (e) {
                                 console.error('Final check error:', e);
                                 showStatusMessage('Authentication cancelled or failed.', 'error');
@@ -388,21 +406,24 @@ async function connectGoogleDrive() {
                     return;
                 }
             } catch (e) {
-                // This is expected due to CORS policy
+                // This is expected due to CORS policy when checking window.closed
                 console.log('Cannot access window.closed due to CORS policy (this is normal)');
             }
             
-            // Timeout
+            // Timeout after max polls
             if (pollCount >= maxPolls) {
                 console.log('Auth polling timed out');
                 clearInterval(pollForCompletion);
                 
                 if (!isGoogleDriveConnected) {
                     showModal('Connection Timeout ⏰', 'The Google Drive connection took too long and timed out. Please try again. If the problem persists, check your internet connection.');
+                    showStatusMessage('Google Drive connection timed out.', 'error');
                 }
                 
                 try {
-                    if (googleAuthWindow) googleAuthWindow.close();
+                    if (googleAuthWindow && !googleAuthWindow.closed) {
+                        googleAuthWindow.close();
+                    }
                 } catch (e) {
                     console.log('Could not close auth window on timeout:', e);
                 }
@@ -414,6 +435,7 @@ async function connectGoogleDrive() {
         showStatusMessage('Failed to connect to Google Drive. Please try again.', 'error');
     }
 }
+
 
 async function disconnectGoogleDrive() {
     try {

@@ -39,9 +39,12 @@ GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', 'http://127.0.0.1:5000/api/auth/google/callback')
 
-
 # Scopes required for Google Drive
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
+
+# Temporary credentials store for Google auth
+temp_credentials_store = {}
+temp_store_lock = Lock()
 
 def get_db():
     """Get database connection."""
@@ -406,6 +409,10 @@ def google_auth():
     """Initiate Google OAuth flow."""
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         return jsonify({'error': 'Google Drive integration not configured on server'}), 500
+    
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'User ID is required'}), 400
             
     flow = Flow.from_client_config(
         client_config={
@@ -421,17 +428,27 @@ def google_auth():
     )
     flow.redirect_uri = GOOGLE_REDIRECT_URI
     
-    auth_url, state = flow.authorization_url(prompt='consent', access_type='offline')
+    # Include user_id in the state parameter
+    state_data = {
+        'user_id': user_id,
+        'timestamp': int(time.time())
+    }
+    state = base64.urlsafe_b64encode(json.dumps(state_data).encode()).decode()
+    
+    auth_url, _ = flow.authorization_url(
+        prompt='consent', 
+        access_type='offline',
+        state=state
+    )
     return jsonify({'auth_url': auth_url}), 200
 
 @app.route('/api/auth/google/callback', methods=['GET'])
 def google_callback():
-    """Handle Google OAuth callback and store credentials directly."""
+    """Handle Google OAuth callback and store credentials."""
     try:
         state = request.args.get('state')
         code = request.args.get('code')
         error = request.args.get('error')
-        user_id = request.args.get('user_id')  # We'll pass this in the auth URL
 
         if error:
             logger.error(f"Google auth error from user denial: {error}")
@@ -451,14 +468,43 @@ def google_callback():
             </html>
             """, 400
 
-        if not code:
-            logger.error("Google callback missing authorization code.")
+        if not code or not state:
+            logger.error("Google callback missing authorization code or state.")
             return """
             <html>
             <head><title>Error</title></head>
             <body>
                 <h1>Error</h1>
-                <p>Authorization code not provided.</p>
+                <p>Authorization code or state not provided.</p>
+                <p>You can close this window.</p>
+            </body>
+            </html>
+            """, 400
+
+        # Decode state to get user_id
+        try:
+            state_data = json.loads(base64.urlsafe_b64decode(state.encode()).decode())
+            user_id = state_data.get('user_id')
+        except Exception as e:
+            logger.error(f"Error decoding state: {e}")
+            return """
+            <html>
+            <head><title>Error</title></head>
+            <body>
+                <h1>Error</h1>
+                <p>Invalid state parameter.</p>
+                <p>You can close this window.</p>
+            </body>
+            </html>
+            """, 400
+
+        if not user_id:
+            return """
+            <html>
+            <head><title>Error</title></head>
+            <body>
+                <h1>Error</h1>
+                <p>User ID not found in state.</p>
                 <p>You can close this window.</p>
             </body>
             </html>
@@ -494,8 +540,36 @@ def google_callback():
             'scopes': credentials.scopes
         })
 
-        # Escape single quotes in the JSON string for JavaScript
-        escaped_creds = creds_json_string.replace("'", "\\'")
+        # Store credentials in database immediately
+        try:
+            db = get_db()
+            db.execute(
+                'UPDATE users SET google_drive_token = ? WHERE user_id = ?',
+                (creds_json_string, user_id)
+            )
+            db.commit()
+            logger.info(f"Google Drive credentials stored for user {user_id}")
+            
+            # Also store in temp store for immediate polling
+            with temp_store_lock:
+                temp_credentials_store[user_id] = {
+                    'credentials': creds_json_string,
+                    'timestamp': time.time()
+                }
+            
+        except Exception as e:
+            logger.error(f"Error storing credentials: {e}")
+            return f"""
+            <html>
+            <head><title>Authentication Error</title></head>
+            <body>
+                <h1>Authentication Error</h1>
+                <p>Failed to store credentials.</p>
+                <p>Error: {str(e)}</p>
+                <p>You can close this window.</p>
+            </body>
+            </html>
+            """, 500
         
         return f"""
         <html>
@@ -505,11 +579,6 @@ def google_callback():
             <p>Google Drive has been connected successfully.</p>
             <p>This window will close automatically...</p>
             <script>
-                // Store success state in localStorage temporarily
-                localStorage.setItem('google_auth_success', 'true');
-                localStorage.setItem('google_auth_credentials', '{escaped_creds}');
-                localStorage.setItem('google_auth_timestamp', Date.now().toString());
-                
                 // Try to close the window
                 setTimeout(function() {{
                     window.close();
@@ -527,6 +596,7 @@ def google_callback():
         <body>
             <h1>Authentication Error</h1>
             <p>An internal server error occurred during authentication.</p>
+            <p>Error: {str(e)}</p>
             <p>You can close this window.</p>
             <script>
                 setTimeout(function() {{
@@ -536,6 +606,40 @@ def google_callback():
         </body>
         </html>
         """, 500
+
+@app.route('/api/auth/google/check/<string:user_id>', methods=['GET'])
+def check_google_auth(user_id):
+    """Check if Google authentication completed for user."""
+    try:
+        # Check temp store first
+        with temp_store_lock:
+            if user_id in temp_credentials_store:
+                # Clean up old entries (older than 5 minutes)
+                current_time = time.time()
+                old_keys = [
+                    k for k, v in temp_credentials_store.items() 
+                    if current_time - v.get('timestamp', 0) > 300
+                ]
+                for key in old_keys:
+                    del temp_credentials_store[key]
+                
+                if user_id in temp_credentials_store:
+                    # Remove from temp store after successful check
+                    del temp_credentials_store[user_id]
+                    return jsonify({'success': True, 'message': 'Authentication completed'}), 200
+        
+        # Check database as fallback
+        db = get_db()
+        user = db.execute('SELECT google_drive_token FROM users WHERE user_id = ?', (user_id,)).fetchone()
+        
+        if user and user['google_drive_token']:
+            return jsonify({'success': True, 'message': 'Authentication completed'}), 200
+        else:
+            return jsonify({'success': False, 'message': 'Authentication not completed'}), 200
+            
+    except Exception as e:
+        logger.error(f"Error checking Google auth status: {e}")
+        return jsonify({'success': False, 'error': 'Check failed'}), 500
 
 @app.route('/api/auth/google/store', methods=['POST'])
 def store_google_credentials():
@@ -558,6 +662,24 @@ def store_google_credentials():
     except Exception as e:
         logger.error(f"Error storing Google credentials: {e}")
         return jsonify({'error': 'Failed to store credentials'}), 500
+
+@app.route('/api/auth/google/cleanup', methods=['POST'])
+def cleanup_temp_credentials():
+    """Clean up old temporary credentials."""
+    try:
+        with temp_store_lock:
+            current_time = time.time()
+            old_keys = [
+                user_id for user_id, data in temp_credentials_store.items()
+                if current_time - data.get('timestamp', 0) > 300  # 5 minutes
+            ]
+            for key in old_keys:
+                del temp_credentials_store[key]
+        
+        return jsonify({'message': f'Cleaned up {len(old_keys)} old entries'}), 200
+    except Exception as e:
+        logger.error(f"Error cleaning up temp credentials: {e}")
+        return jsonify({'error': 'Cleanup failed'}), 500
 
 @app.route('/api/drive/upload', methods=['POST'])
 def upload_to_google_drive():
